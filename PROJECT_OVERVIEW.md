@@ -20,7 +20,8 @@ The system must preserve the engineering intent and final printable appearance o
 - Support multiple cells under each tower.
 - Allow fast retrieval by Cooling Tower Serial No. or equipment serial numbers.
 - Generate a printable/PDF report closely matching the present hardcopy format.
-- Support document/photo evidence upload.
+- Support one logical JCC Letter/document for the overall E&C record/package, independent of the individual cell reports.
+- Support tower-photo evidence with controlled count and total size.
 - Maintain report workflow and auditability.
 - Provide a reusable backend for a later Android app.
 
@@ -51,7 +52,7 @@ Example:
 26-2-0001
 ```
 
-This is the primary Cooling Tower Serial No. and replaces the earlier working term "Base Paharpur Serial".
+This is the primary Cooling Tower Serial No. and replaces the earlier working term `Base Paharpur Serial`.
 
 ### 2.2 Tower Suffix Rules
 
@@ -96,6 +97,14 @@ Example:
 
 Each individual cell has its own Erection & Commissioning Report.
 
+### 2.4 Shared E&C Package Assets
+
+Not every uploaded document belongs to one cell.
+
+The **JCC Letter is one logical document for the overall E&C record/package**, not one JCC Letter per cell. It may contain one page or several pages. The data-entry records remain cell-wise, but the JCC document is shared and must not be duplicated for every cell.
+
+Implementation should therefore provide a parent/group scope for assets that belong to the overall Cooling Tower Serial No. E&C package, while cell-specific data remains under the individual cell report.
+
 ---
 
 ## 3. User Roles
@@ -111,7 +120,7 @@ A supervisor can:
 - Create a new Erection & Commissioning Report without waiting for job assignment.
 - Save a report as Draft.
 - Review and confirm a report before submission.
-- Upload required/optional attachments.
+- Upload permitted attachments.
 - View his own previous submitted/completed reports.
 - View completed/submitted reports in read-only mode.
 
@@ -135,8 +144,6 @@ Admin can:
 User passwords must never be stored in plain text and therefore must not be readable by Admin.
 
 Passwords should be stored only as secure hashes, preferably Argon2id (bcrypt acceptable if needed). Admin should have password reset capability rather than password viewing capability.
-
-This is a mandatory security requirement because readable stored passwords would expose every supervisor account if the database were compromised.
 
 ---
 
@@ -187,7 +194,7 @@ Recommended implementation:
 - Admin Force Logout option.
 - Automatic logout after password reset or security event.
 
-The phrase "single time login" should mean persistent login, not a permanently valid insecure session.
+The phrase `single time login` means persistent login, not a permanently valid insecure session.
 
 ---
 
@@ -209,7 +216,7 @@ My Previous Reports
 
 Clicking `New Erection & Commissioning Report` opens the data-entry form directly.
 
-There is no "My Assigned Jobs" dependency.
+There is no `My Assigned Jobs` dependency.
 
 ### 5.3 Previous Reports
 
@@ -327,8 +334,6 @@ The following serial numbers must be stored in dedicated searchable fields:
 
 Other equipment serials may also be stored where present, but these four are mandatory search dimensions in the system architecture.
 
-These values must not exist only inside free-text descriptions.
-
 ---
 
 ## 9. DE / NDE Interactive Alignment Control
@@ -358,67 +363,73 @@ Increment/decrement:
 0.1
 ```
 
-Example controls:
-
-```text
-[-] -0.2 [+]
-[-] +0.1 [+]
-```
-
 Values must be stored as numeric data, not only as an image.
 
 ### 9.3 No Automatic Limit Warning
 
-The application should record values only.
-
-Do not display automatic warnings such as:
-
-```text
-Value exceeds recommended limit
-```
-
-unless such engineering validation is intentionally added in a future revision.
+The application should record values only. Do not display automatic engineering acceptance/limit warnings unless deliberately added later.
 
 ---
 
 ## 10. Uploads and Attachments
 
-Supervisors must be able to upload two distinct attachment types for each cell report.
+There are two different upload types with different scope and rules.
 
-### 10.1 JCC Letter
+### 10.1 JCC Letter / JCC Document
 
-Purpose: upload the JCC letter/document related to the report.
+Purpose: upload the JCC Letter/document associated with the overall Erection & Commissioning record/package.
 
-Rules:
+**Important scope rule:**
 
-- Single upload only.
-- Accepted content: PDF or photo/image.
-- Suggested supported image formats: JPG/JPEG, PNG, WEBP.
-- Only one active JCC Letter attachment per report.
-- If replacement is allowed while the report is still Draft, the new upload should replace the previous file.
-- After final submission, supervisor replacement/edit should not be allowed.
+- The JCC is **not one upload per cell**.
+- There is **one logical JCC document for the overall E&C package / Cooling Tower Serial No. record**.
+- That single JCC document may contain **one page or multiple pages**.
+- A multi-page JCC must still be treated by the application as one logical document.
+
+Accepted source forms:
+
+- PDF, including a multi-page PDF.
+- Photo/image.
+- If a paper JCC has several pages and is captured as separate photographs, those page images should be grouped and presented as **one JCC document**, not as Tower Photos and not as separate JCC records.
+
+Suggested supported image formats:
+
+- JPG/JPEG
+- PNG
+- WEBP
+
+Lifecycle rules:
+
+- One active logical JCC document per overall E&C package.
+- It may be replaced while the related E&C package is still editable/Draft.
+- Replacement should supersede the previous active JCC while preserving audit history where implemented.
+- After final submission, supervisor replacement/edit is not allowed.
+- Admin can view/download the JCC from the overall report context.
 
 Suggested UI:
 
 ```text
 JCC Letter
-[ Upload PDF / Photo ]
+[ Upload PDF / Photo(s) ]
 
-Uploaded: JCC_26-2-0001_A_Cell-2.pdf
-[ View ] [ Replace ]   # Replace only while editable
+Uploaded JCC: 3 pages
+[ View ] [ Replace ]    # Replace only while editable
 ```
+
+For a PDF, page count may be displayed if available. For photo-based JCC pages, the UI should preserve page order.
 
 ### 10.2 Tower Photos
 
-Purpose: upload site/tower photographs related to the report/cell.
+Purpose: upload site/tower photographs related to the E&C record.
 
 Rules:
 
 - Multiple uploads allowed.
-- Maximum 5 files.
-- Total combined Tower Photos size cap: 5 MB per report.
+- Maximum 5 photos.
+- Total combined Tower Photos size cap: 5 MB.
 - Photo formats only unless later expanded.
-- Individual and aggregate file validation must be done both in frontend and backend.
+- The 5 MB cap applies to the **combined total**, not 5 MB per photo.
+- Individual and aggregate validation must be enforced in frontend and backend.
 
 Suggested UI:
 
@@ -442,9 +453,10 @@ Backend must validate:
 - File extension.
 - File size.
 - Aggregate Tower Photo size.
-- Maximum file count.
+- Maximum Tower Photo count.
 - Safe generated storage filename.
 - Access authorization.
+- Correct JCC page/document grouping.
 
 Original user filenames may be kept as metadata but should not be used directly as server filesystem paths.
 
@@ -456,7 +468,7 @@ Recommended production path:
 
 - Metadata in PostgreSQL.
 - Binary files in object storage.
-- Database stores file ID, report ID, attachment type, original filename, generated key/path, MIME type, byte size, uploader, and timestamps.
+- Database stores file/document ID, scope/group ID, attachment type, original filename, generated key/path, MIME type, byte size, uploader, page/order metadata where required, and timestamps.
 
 ---
 
@@ -480,9 +492,7 @@ SUBMITTED
 APPROVED
 ```
 
-Recommended implementation detail:
-
-`CONFIRM` should be treated as a user action/confirmation step rather than necessarily a persisted status.
+`CONFIRM` should normally be treated as a user action/confirmation step rather than necessarily a persisted status.
 
 Practical database statuses:
 
@@ -492,8 +502,6 @@ REVIEWED
 SUBMITTED
 APPROVED
 ```
-
-Suggested behaviour:
 
 ### DRAFT
 
@@ -514,6 +522,7 @@ Suggested behaviour:
 ### SUBMITTED
 
 - Supervisor can view but cannot edit.
+- JCC and Tower Photos are locked for supervisor editing/replacement.
 - Admin can review.
 
 ### APPROVED
@@ -521,8 +530,6 @@ Suggested behaviour:
 - Final approved report.
 - Read-only for supervisor.
 - Admin-controlled final state.
-
-Any future "return for correction" workflow should be added explicitly rather than silently allowing edits to submitted reports.
 
 ---
 
@@ -535,17 +542,7 @@ Suggested behaviour:
 - Save changed fields after a short debounce interval.
 - Save on section change.
 - Save before moving to review.
-- Display simple state such as:
-
-```text
-Saved
-Saving...
-Unable to sync - retrying
-```
-
-A supervisor should not lose a long report because of a browser close, incoming phone call, or temporary connectivity interruption.
-
-Offline-first support is not mandatory for the first web release, but the architecture should not prevent it in the future Android app.
+- Display simple state such as `Saved`, `Saving...`, or `Unable to sync - retrying`.
 
 ---
 
@@ -573,39 +570,9 @@ Date To                  [             ]
 
 Admin should search using the Cooling Tower Serial No. without needing the suffix.
 
-Example search:
+If one matching cell report exists, the full report may open directly. If multiple towers exist, show available suffixes/towers. Selecting a tower shows available cells. If a single unsuffixed tower has multiple cells, show the cell selector directly.
 
-```text
-26-2-0001
-```
-
-#### Single tower / single cell
-
-If only one matching cell report exists, the full report may open directly.
-
-#### Multiple towers
-
-Show available towers:
-
-```text
-26-2-0001 A
-26-2-0001 B
-26-2-0001 C
-```
-
-Selecting a tower shows available cells:
-
-```text
-Cell-1
-Cell-2
-Cell-3
-```
-
-Selecting a cell opens the full E&C report.
-
-#### Single tower / multiple cells
-
-If there is no tower suffix but multiple cells exist, show the cell selector directly.
+The overall result view should also expose the single shared JCC document and Tower Photos associated with the E&C package.
 
 ### 13.3 Equipment Serial Search
 
@@ -627,8 +594,6 @@ The supervisor data-entry interface should be mobile optimized and does not need
 
 The report output/print view should closely reproduce the existing Erection & Commissioning Completion Report layout.
 
-Architecture:
-
 ```text
 Mobile Data Entry
       |
@@ -644,7 +609,7 @@ Report Renderer
 
 The PDF should include the technical data, alignment graphics/readings, detailed report, customer comments, and signature information as applicable.
 
-Attachments such as the JCC letter and tower photos should remain linked to the report and may optionally be appended to a future combined report package, but should not alter the original three-page E&C form unless explicitly designed later.
+The JCC document and Tower Photos remain linked supporting records. A future combined-download package may include the ECR PDF + JCC + Tower Photos without altering the original three-page ECR format.
 
 ---
 
@@ -653,14 +618,6 @@ Attachments such as the JCC letter and tower photos should remain linked to the 
 ### 15.1 Backend
 
 Recommended: **FastAPI**
-
-Reasons:
-
-- Natural API-first architecture.
-- Strong request/response validation through Pydantic.
-- Automatic OpenAPI documentation.
-- Suitable for later Android integration.
-- Good fit for typed engineering/report data.
 
 Suggested backend components:
 
@@ -678,13 +635,6 @@ Suggested backend components:
 
 Recommended: **PostgreSQL**
 
-Reasons:
-
-- Strong relational integrity.
-- Reliable indexing/search.
-- JSONB available for limited flexible metadata when appropriate.
-- Mature migration/backup ecosystem.
-
 ### 15.3 Frontend
 
 Phase 1 should be a mobile-first responsive web frontend.
@@ -693,8 +643,6 @@ Recommended options:
 
 - Server-rendered/Jinja + HTMX + lightweight JavaScript for fastest implementation, or
 - React/Vue if a richer SPA architecture is desired from the beginning.
-
-For this project's first version, a simpler responsive frontend is preferred over unnecessary frontend complexity.
 
 Core requirements:
 
@@ -708,15 +656,7 @@ Core requirements:
 
 ### 15.4 Future Android App
 
-The Android app should consume the same FastAPI endpoints.
-
-Possible technology:
-
-- Kotlin
-- Jetpack Compose
-- Local cache/database for later offline support
-
-No backend rewrite should be necessary.
+The Android app should consume the same FastAPI endpoints. Kotlin + Jetpack Compose is a suitable future option.
 
 ---
 
@@ -729,8 +669,8 @@ The database should model real business relationships rather than treating the r
 ```text
 users
 user_sessions
+ecr_packages / report_groups
 reports
-towers/cooling_tower identity fields
 report_motor
 report_fan
 report_fan_blades
@@ -750,25 +690,42 @@ report_optionals
 report_comments
 report_signatures
 attachments
+jcc_documents / jcc_pages
 audit_log
 ```
 
 The exact normalized structure should be finalized after a field-by-field mapping of the current form.
 
-### 16.2 Report Identity
+### 16.2 E&C Package / Group
+
+Because the JCC is shared rather than cell-specific, the implementation should have a parent grouping concept for the overall E&C record.
+
+Indicative fields:
+
+```text
+id
+cooling_tower_serial_no
+customer
+cooling_tower_series
+model
+place_of_installation
+created_by
+status / package status as finalized
+created_at
+updated_at
+```
+
+Individual cell reports link to this parent group.
+
+### 16.3 Cell Report Identity
 
 Suggested report-level fields:
 
 ```text
 id
-cooling_tower_serial_no
+ecr_package_id
 tower_suffix          nullable
 cell_no
-customer
-customer_order_no
-cooling_tower_series
-model
-place_of_installation
 erection_start_date   nullable
 erection_completion_date
 supervisor_user_id
@@ -780,31 +737,22 @@ approved_at           nullable
 approved_by           nullable
 ```
 
-### 16.3 Derived Display Identity
-
-Do not store duplicated formatted strings as the source of truth.
-
-Example source data:
-
-```text
-cooling_tower_serial_no = "26-2-0001"
-tower_suffix = "B"
-cell_no = 3
-```
-
-Derived display:
+Derived display example:
 
 ```text
 26-2-0001 B / Cell-3
 ```
 
-### 16.4 Attachment Table
+### 16.4 Attachment / JCC Model
 
-Suggested structure:
+Suggested logical structure:
 
 ```text
+attachments
+-----------
 id
-report_id
+scope_type            PACKAGE | CELL_REPORT
+scope_id
 attachment_type       JCC_LETTER | TOWER_PHOTO
 original_filename
 storage_key
@@ -812,13 +760,23 @@ mime_type
 size_bytes
 uploaded_by
 created_at
+
+jcc_pages (only if photo-based multi-page JCC needs separate stored image objects)
+---------
+id
+jcc_document_id
+attachment_id
+page_order
 ```
 
-Constraints/business validation:
+Business rules:
 
-- JCC_LETTER: maximum one active file per report.
-- TOWER_PHOTO: maximum five files per report.
-- TOWER_PHOTO aggregate size: maximum 5 MB.
+- `JCC_LETTER`: one active **logical JCC document per E&C package**, not per cell.
+- The JCC may be one-page or multi-page.
+- Multi-page PDF remains one file/document.
+- Multiple photographed JCC pages, when supported, are grouped as one JCC document with ordered pages.
+- `TOWER_PHOTO`: maximum five photos.
+- `TOWER_PHOTO` aggregate size: maximum 5 MB.
 
 ---
 
@@ -836,38 +794,24 @@ Database indexes should be created for frequently searched values:
 - `drive_shaft_serial_no`
 - `gearbox_serial_no`
 
-Serial numbers should be normalized for searching where practical, for example trimming leading/trailing whitespace and using case-insensitive comparison without changing the displayed original value.
-
 ---
 
 ## 18. Audit and Data Integrity
 
-The application should maintain an audit trail for important actions.
-
-Recommended events:
+Recommended audit events:
 
 - User signup.
 - Login/logout/security session changes.
 - Report creation.
 - Important field changes.
-- Attachment upload/replacement/removal.
+- JCC upload/replacement/page changes.
+- Tower Photo upload/replacement/removal.
 - Review confirmation.
 - Submission.
 - Approval.
 - Admin changes.
 
-Audit information:
-
-```text
-actor
-report/user target
-action
-timestamp
-previous value (where appropriate)
-new value (where appropriate)
-```
-
-Submitted/approved reports must not be silently modified.
+Submitted/approved records must not be silently modified.
 
 ---
 
@@ -897,14 +841,22 @@ POST   /api/reports/{report_id}/review
 POST   /api/reports/{report_id}/submit
 ```
 
-### Attachments
+### JCC / Shared Package Attachments
 
 ```text
-POST   /api/reports/{report_id}/attachments/jcc
-DELETE /api/reports/{report_id}/attachments/jcc
-POST   /api/reports/{report_id}/attachments/tower-photos
-DELETE /api/reports/{report_id}/attachments/{attachment_id}
-GET    /api/reports/{report_id}/attachments/{attachment_id}
+POST   /api/ecr-packages/{package_id}/jcc
+GET    /api/ecr-packages/{package_id}/jcc
+DELETE /api/ecr-packages/{package_id}/jcc
+```
+
+If photo-based multi-page JCC capture is supported, the same endpoint may accept an ordered page set, or dedicated page endpoints may be added.
+
+### Tower Photos
+
+```text
+POST   /api/ecr-packages/{package_id}/tower-photos
+DELETE /api/ecr-packages/{package_id}/tower-photos/{attachment_id}
+GET    /api/ecr-packages/{package_id}/tower-photos/{attachment_id}
 ```
 
 ### Admin
@@ -936,28 +888,24 @@ Examples:
 
 - Cooling Tower Serial No. required.
 - Tower suffix required when multiple-tower flag is true.
-- Tower suffix absent when single-tower flag is false/no.
 - Cell No. must be a positive integer; no arbitrary upper cap.
 - Erection Start Date optional.
 - Erection Completion Date required.
 - Submission Date generated automatically.
 - Supervisor derived from authenticated user.
-- JCC letter: maximum one.
+- JCC: one active logical document per E&C package, not per cell.
+- JCC may be multi-page.
 - Tower photos: maximum five.
 - Tower photo total payload: maximum 5 MB.
 - Alignment values: -1.0 through +1.0 in increments of 0.1.
 - Submitted reports cannot be edited by supervisor.
-- Approved reports cannot be edited through normal supervisor flows.
+- Submitted JCC/Tower Photos cannot be replaced by supervisor.
 
 ---
 
 ## 21. Implementation Preview / Roadmap
 
 ### Phase 0 - Requirements Freeze and Form Mapping
-
-Goal: create a definitive specification before application code grows.
-
-Deliverables:
 
 - Confirm project terminology.
 - Map every field from all three pages of the existing form.
@@ -966,12 +914,11 @@ Deliverables:
 - Define Yes/No/N/A controls.
 - Define DE/NDE control semantics.
 - Define final report/PDF layout requirements.
-- Confirm JCC and Tower Photo attachment behaviour.
+- Confirm one shared JCC document and multi-page behavior.
+- Confirm Tower Photo rules.
 - Confirm admin approval workflow.
 
 ### Phase 1 - Project Skeleton and Infrastructure
-
-Deliverables:
 
 - Repository structure.
 - FastAPI application skeleton.
@@ -983,8 +930,6 @@ Deliverables:
 - Basic automated tests.
 
 ### Phase 2 - Authentication and User Management
-
-Deliverables:
 
 - Signup.
 - Login.
@@ -999,8 +944,6 @@ Deliverables:
 
 ### Phase 3 - Core Report Identity and Draft Lifecycle
 
-Deliverables:
-
 - Create new E&C report.
 - Cooling Tower Serial No.
 - Single/multiple tower logic.
@@ -1011,13 +954,12 @@ Deliverables:
 - Draft state.
 - Autosave.
 - My Previous Reports.
+- E&C package/group relationship.
 
 ### Phase 4 - Technical Form Digitization
 
-Deliverables:
-
-- Motor section.
-- Fan and blade section.
+- Motor.
+- Fan and blades.
 - Fan cylinder.
 - Drive shaft.
 - Gearbox.
@@ -1030,12 +972,10 @@ Deliverables:
 - Lubrication.
 - Hardware.
 - Torque table.
-- Other optional equipment.
+- Other optionals.
 - Detailed report and comments.
 
 ### Phase 5 - DE/NDE and Alignment Interface
-
-Deliverables:
 
 - Interactive DE graphic.
 - Interactive NDE graphic.
@@ -1046,33 +986,31 @@ Deliverables:
 
 ### Phase 6 - Attachments
 
-Deliverables:
-
-- JCC Letter single upload.
-- PDF/photo validation.
+- One logical JCC document per E&C package.
+- Multi-page PDF support.
+- Photo-based JCC page grouping/order if used.
+- JCC replacement while Draft only.
+- JCC locked after submission.
 - Tower Photo multi-upload.
 - Maximum five photos.
 - Total Tower Photo cap 5 MB.
-- Frontend upload counters/progress.
-- Backend aggregate-size enforcement.
+- Frontend counters/progress.
+- Backend count/aggregate-size enforcement.
 - Secure attachment retrieval.
 - Attachment metadata.
 
 ### Phase 7 - Review / Confirm / Submit / Approve
 
-Deliverables:
-
 - Review screen.
 - Confirm action.
 - Submit action.
 - Supervisor read-only after submission.
+- Attachment lock after submission.
 - Admin approval.
 - Status history.
 - Audit trail.
 
 ### Phase 8 - Admin Search
-
-Deliverables:
 
 - Cooling Tower Serial No. search without suffix.
 - Hierarchical tower selection.
@@ -1083,13 +1021,11 @@ Deliverables:
 - Motor Serial search.
 - Customer/model/date filters.
 - Full report display.
+- Shared JCC/Tower Photo visibility.
 
 ### Phase 9 - Final Report / PDF
 
-Deliverables:
-
-- Printable report view.
-- Layout close to existing hardcopy.
+- Printable report view close to existing hardcopy.
 - Page 1 technical data.
 - Page 2 technical/alignment information.
 - Page 3 detailed report/customer comments/signature area.
@@ -1097,25 +1033,9 @@ Deliverables:
 
 ### Phase 10 - Testing and Pilot
 
-Pilot with a small group of supervisors before rollout to all users.
-
-Test areas:
-
-- Android browser sizes.
-- iPhone/mobile browsers where applicable.
-- Desktop admin view.
-- Weak/mobile network behaviour.
-- Autosave recovery.
-- Duplicate reports.
-- File upload validation.
-- Search accuracy.
-- PDF layout.
-- Permission boundaries.
-- Submission locking.
+Test Android browsers, desktop admin, weak/mobile networks, autosave recovery, duplicate reports, JCC multi-page behavior, photo-size limits, search accuracy, PDF layout, permission boundaries, and submission locking.
 
 ### Phase 11 - Production Rollout
-
-Deliverables:
 
 - Production server.
 - HTTPS.
@@ -1128,20 +1048,15 @@ Deliverables:
 
 ### Phase 12 - Future Android Application
 
-Potential scope:
-
 - Native Kotlin/Jetpack Compose UI.
 - Same FastAPI backend.
 - Local draft persistence.
 - Offline entry and later synchronization.
-- Camera-optimized Tower Photo capture.
-- Push notifications if later required.
+- Camera-optimized upload.
 
 ---
 
 ## 22. Suggested Repository Structure
-
-Indicative only:
 
 ```text
 ECR/
@@ -1160,7 +1075,6 @@ ECR/
 |- static/
 |- tests/
 |- docs/
-|- migrations/
 |- .env.example
 |- docker-compose.yml
 |- pyproject.toml
@@ -1168,13 +1082,11 @@ ECR/
 `- TODO.md
 ```
 
-The final directory structure should be selected when implementation starts; this document defines architecture, not a rigid folder mandate.
-
 ---
 
 ## 23. Non-Goals for Initial Release
 
-Unless later requested, Phase 1 should not attempt to include:
+Unless later requested, the first core release should not attempt to include:
 
 - Native Android app.
 - AI-based engineering acceptance/rejection.
@@ -1183,8 +1095,6 @@ Unless later requested, Phase 1 should not attempt to include:
 - Complex job assignment workflow.
 - Offline-first browser synchronization.
 - Large ERP integration.
-
-These can be added later without changing the fundamental Cooling Tower -> Tower -> Cell -> Report model.
 
 ---
 
@@ -1195,11 +1105,12 @@ The project must not be implemented as a digital image of three paper pages.
 The source of truth is structured engineering data:
 
 ```text
-Cooling Tower
+Cooling Tower / E&C Package
+   -> shared JCC and supporting files
    -> Tower suffix when required
       -> Cell
          -> E&C Report
-            -> Equipment / readings / comments / files / approval
+            -> Equipment / readings / comments / approval
 ```
 
 The traditional three-page Erection & Commissioning Completion Report is an output representation of this structured data.
