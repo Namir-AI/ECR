@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "paharpur-ecr"
+version = "0.1.0"
+description = "Paharpur Cooling Towers Erection & Commissioning Report application"
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "alembic>=1.16,<2",
+    "fastapi>=0.116,<1",
+    "pydantic-settings>=2.10,<3",
+    "pymysql[rsa]>=1.1,<2",
+    "python-dotenv>=1.1,<2",
+    "sqlalchemy>=2.0,<3",
+    "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2,<3",
+    "pytest>=8.4,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"
