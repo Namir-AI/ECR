@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Paharpur ECR{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+    <script src="{{ url_for('static', path='/password_visibility.js') }}" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">Paharpur Service Management</a>
+      {% if current_user %}
+        <nav aria-label="Account navigation">
+          <a href="/dashboard">Home</a>
+          {% if current_user.role.value == 'ADMIN' %}
+            <a href="/admin/users">Users</a>
+          {% endif %}
+          <a href="/auth/change-password">Change password</a>
+          <form method="post" action="/auth/logout" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="link-button">Logout</button>
+          </form>
+        </nav>
+      {% endif %}
+    </header>
+    <main class="page-shell">
+      {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+      {% if message %}<div class="alert alert-success" role="status">{{ message }}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

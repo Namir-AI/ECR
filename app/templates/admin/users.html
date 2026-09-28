@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Users — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>User Management</h1>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Employee ID</th><th>Role</th><th>Status</th><th>Registered</th><th>Last login</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td>{{ user.full_name }}{% if user.id in requested_user_ids %}<span class="badge">Reset requested</span>{% endif %}</td>
+          <td>{{ user.employee_id }}</td>
+          <td>{{ user.role.value }}</td>
+          <td>{{ user.status.value }}</td>
+          <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else 'Never' }}</td>
+          <td><a href="/admin/users/{{ user.id }}">View</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7">No users found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

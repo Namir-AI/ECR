@@ -1,9 +1,15 @@
 """FastAPI application entry point."""
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
+from app.auth.passwords import PasswordManager
 from app.core.config import AppSettings, get_app_settings
+
+STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -17,6 +23,8 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         redoc_url="/redoc",
     )
     application.state.settings = resolved_settings
+    application.state.password_manager = PasswordManager(resolved_settings)
+    application.mount("/static", StaticFiles(directory=STATIC_DIRECTORY), name="static")
     application.include_router(api_router)
     return application
 

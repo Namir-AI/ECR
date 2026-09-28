@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -23,6 +23,22 @@ class AppSettings(BaseSettings):
     app_debug: bool = False
     app_host: str = "127.0.0.1"
     app_port: int = Field(default=8000, ge=1, le=65535)
+    session_cookie_name: str = "ecr_session"
+    session_ttl_days: int = Field(default=30, ge=1, le=365)
+    session_secure_cookie: bool = False
+    session_touch_interval_seconds: int = Field(default=300, ge=60, le=3600)
+    csrf_cookie_name: str = "ecr_csrf"
+    password_min_length: int = Field(default=12, ge=8, le=128)
+    password_max_length: int = Field(default=128, ge=32, le=1024)
+    argon2_time_cost: int = Field(default=3, ge=1, le=10)
+    argon2_memory_cost_kib: int = Field(default=65536, ge=8192, le=1048576)
+    argon2_parallelism: int = Field(default=4, ge=1, le=16)
+
+    @model_validator(mode="after")
+    def password_length_range_is_valid(self) -> "AppSettings":
+        if self.password_min_length > self.password_max_length:
+            raise ValueError("PASSWORD_MIN_LENGTH cannot exceed PASSWORD_MAX_LENGTH.")
+        return self
 
 
 class Settings(AppSettings):

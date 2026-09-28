@@ -41,5 +41,5 @@ def get_session_factory() -> sessionmaker[Session]:
 
 def get_db_session() -> Generator[Session, None, None]:
     """Provide one database session and always close it after use."""
-    with get_session_factory() as session:
+    with get_session_factory()() as session:
         yield session

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "components/password_field.html" import password_field %}
+{% block title %}Login — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card auth-card">
+  <h1>Login</h1>
+  {% if registered %}
+    <div class="alert alert-success" role="status">Registration received. An Admin must activate your account before login.</div>
+  {% endif %}
+  <form method="post" action="/auth/login">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Employee ID or Mobile Number
+      <input name="identifier" value="{{ form.identifier or '' }}" required autocomplete="username">
+    </label>
+    {{ password_field("Password", "password", "current-password") }}
+    <button type="submit">Log in</button>
+  </form>
+  <div class="auth-links">
+    <a href="/auth/forgot-password">Forgot Password?</a>
+    <a href="/auth/signup">Create supervisor account</a>
+  </div>
+</section>
+{% endblock %}

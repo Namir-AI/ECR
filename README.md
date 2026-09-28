@@ -56,6 +56,8 @@ Then open:
 
 ```text
 http://127.0.0.1:8000/health
+http://127.0.0.1:8000/auth/signup
+http://127.0.0.1:8000/auth/login
 ```
 
 Expected response:
@@ -86,10 +88,10 @@ Apply all migrations:
 alembic upgrade head
 ```
 
-Downgrade the Phase 1 baseline:
+Downgrade Phase 2 to the Phase 1 baseline:
 
 ```bash
-alembic downgrade base
+alembic downgrade 20260928_01
 ```
 
 Reapply it:
@@ -98,8 +100,33 @@ Reapply it:
 alembic upgrade head
 ```
 
-Phase 1 contains an empty baseline revision. It creates no ECR, authentication,
-Budget, or Bill business tables.
+Phase 1 contains an empty baseline revision. Phase 2 adds only the shared
+authentication and user tables. No ECR, Budget, or Bill business tables exist.
+
+## Create the initial Admin
+
+After applying migrations, run the interactive bootstrap command:
+
+```bash
+python -m app.users.create_admin
+```
+
+The command prompts for the required identity fields and uses hidden password
+input. It does not accept the password as a command-line argument or require it
+in `.env`.
+
+For localhost HTTP, `SESSION_SECURE_COOKIE=false` is permitted. Set it to
+`true` wherever the application is served over production HTTPS.
+
+If an existing Admin forgets their password, run the server-side interactive
+recovery command:
+
+```bash
+python -m app.users.reset_admin_password
+```
+
+The command accepts no password argument. It uses hidden password prompts and
+revokes all existing sessions for the selected Admin.
 
 ## Tests
 
