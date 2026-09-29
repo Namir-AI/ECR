@@ -1,0 +1,28 @@
+[Unit]
+Description=Paharpur ECR FastAPI Application
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@@SERVICE_USER@@
+Group=@@SERVICE_USER@@
+WorkingDirectory=@@INSTALL_DIR@@/current
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=@@INSTALL_DIR@@/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port @@APP_PORT@@ --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=@@INSTALL_DIR@@/shared
+CapabilityBoundingSet=
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
