@@ -280,25 +280,29 @@ resolve_git_ref() {
 prepare_release() {
     local commit=$1
     local timestamp short_commit release_dir
-    timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-    short_commit=${commit:0:12}
-    release_dir="$ECR_INSTALL_DIR/releases/${timestamp}-${short_commit}"
-    [[ ! -e "$release_dir" ]] || die "Release path already exists: $release_dir"
+    {
+        timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+        short_commit=${commit:0:12}
+        release_dir="$ECR_INSTALL_DIR/releases/${timestamp}-${short_commit}"
+        [[ ! -e "$release_dir" ]] || die "Release path already exists: $release_dir"
 
-    log "Preparing isolated application release $short_commit."
-    git_as_deployer --git-dir="$ECR_INSTALL_DIR/repository.git" \
-        worktree add --detach "$release_dir" "$commit"
-    local required_file
-    for required_file in \
-        pyproject.toml uv.lock app/main.py alembic.ini \
-        install/update.sh install/status.sh install/lib/env_tools.py; do
-        [[ -f "$release_dir/$required_file" ]] || \
-            die "Requested ref lacks required deployment/application file: $required_file"
-    done
-    if [[ -f "$ECR_INSTALL_DIR/shared/.env" ]]; then
-        ln -s "$ECR_INSTALL_DIR/shared/.env" "$release_dir/.env"
-    fi
-    sync_release_dependencies "$release_dir"
+        log "Preparing isolated application release $short_commit."
+        git_as_deployer --git-dir="$ECR_INSTALL_DIR/repository.git" \
+            worktree add --detach "$release_dir" "$commit"
+        local required_file
+        for required_file in \
+            pyproject.toml uv.lock app/main.py alembic.ini \
+            install/update.sh install/status.sh install/lib/env_tools.py; do
+            [[ -f "$release_dir/$required_file" ]] || \
+                die "Requested ref lacks required deployment/application file: $required_file"
+        done
+        if [[ -f "$ECR_INSTALL_DIR/shared/.env" ]]; then
+            ln -s "$ECR_INSTALL_DIR/shared/.env" "$release_dir/.env"
+        fi
+        sync_release_dependencies "$release_dir"
+    } >&2
+
+    # stdout is the function's return channel for command substitution.
     printf '%s\n' "$release_dir"
 }
 
