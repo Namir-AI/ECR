@@ -1,29 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Users — Paharpur ECR{% endblock %}
+{% block title %}User Management — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card">
-  <h1>User Management</h1>
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr><th>Name</th><th>Employee ID</th><th>Role</th><th>Status</th><th>Registered</th><th>Last login</th><th></th></tr>
-      </thead>
-      <tbody>
-      {% for user in users %}
-        <tr>
-          <td>{{ user.full_name }}{% if user.id in requested_user_ids %}<span class="badge">Reset requested</span>{% endif %}</td>
-          <td>{{ user.employee_id }}</td>
-          <td>{{ user.role.value }}</td>
-          <td>{{ user.status.value }}</td>
-          <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-          <td>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else 'Never' }}</td>
-          <td><a href="/admin/users/{{ user.id }}">View</a></td>
-        </tr>
+  <div class="heading-row">
+    <div>
+      {% if current_user.role.value == 'BRANCH_ADMIN' %}
+        <h1>{{ current_user.branch.name }} — Supervisor Management</h1>
+        <p class="muted">Supervisors of {{ current_user.branch.name }} only</p>
       {% else %}
-        <tr><td colspan="7">No users found.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
+        <h1>User Management</h1>
+        <p class="muted">Global user administration across all branches</p>
+      {% endif %}
+    </div>
+    {% if current_user.role.value == 'SUPERADMIN' %}<a class="button" href="/admin/users/create-branch-admin">＋ Create Branch Admin</a>{% endif %}
   </div>
+  {% if current_user.role.value == 'SUPERADMIN' %}
+    <form method="get" action="/admin/users" class="filter-grid">
+      <label>Branch<select name="branch_id"><option value="">All branches</option>{% for branch in branches %}<option value="{{ branch.id }}" {% if filters.branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label>
+      <label>Role<select name="role"><option value="">All roles</option>{% for value, label in [('SUPERADMIN', 'Super Admin'), ('BRANCH_ADMIN', 'Branch Admin'), ('SUPERVISOR', 'Supervisor')] %}<option value="{{ value }}" {% if filters.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+      <label>Status<select name="status"><option value="">All statuses</option>{% for value in ['PENDING', 'ACTIVE', 'DISABLED'] %}<option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ value.title() }}</option>{% endfor %}</select></label>
+      <button type="submit" class="secondary">Filter</button>
+    </form>
+  {% endif %}
+  <div class="table-scroll"><table>
+    <thead><tr><th>Full Name</th><th>Employee ID</th><th>Branch</th><th>Role</th><th>Status</th><th>Registered</th><th>Last Login</th><th>Reset Requested</th><th></th></tr></thead>
+    <tbody>{% for user in users %}<tr>
+      <td>{{ user.full_name }}</td><td>{{ user.employee_id }}</td><td>{{ user.branch.name }}</td>
+      <td>{{ "Super Admin" if user.role.value == "SUPERADMIN" else user.role.value.replace('_', ' ').title() }}</td><td><span class="status-badge status-{{ user.status.value|lower }}">{{ user.status.value }}</span></td>
+      <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else 'Never' }}</td>
+      <td>{% if user.id in requested_user_ids %}<span class="badge">Requested</span>{% else %}No{% endif %}</td><td><a href="/admin/users/{{ user.id }}">View</a></td>
+    </tr>{% else %}<tr><td colspan="9">No users are available in this scope.</td></tr>{% endfor %}</tbody>
+  </table></div>
 </section>
 {% endblock %}

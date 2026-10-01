@@ -1,4 +1,5 @@
 <!doctype html>
+{% from "components/navigation_icon.html" import navigation_icon %}
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -11,15 +12,20 @@
     <header class="site-header">
       <a class="brand" href="/">Paharpur Service Management</a>
       {% if current_user %}
-        <nav aria-label="Account navigation">
-          <a href="/dashboard">Home</a>
-          {% if current_user.role.value == 'ADMIN' %}
-            <a href="/admin/users">Users</a>
+        {% set current_path = request.url.path %}
+        <nav class="primary-nav" aria-label="Primary navigation">
+          <a class="nav-item{% if current_path == '/dashboard' %} is-active{% endif %}" href="/dashboard"{% if current_path == '/dashboard' %} aria-current="page"{% endif %}>{{ navigation_icon("dashboard") }}<span>Dashboard</span></a>
+          {% if current_user.role.value == 'SUPERADMIN' %}
+            <a class="nav-item{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>User Management</span></a>
+            <a class="nav-item{% if current_path.startswith('/admin/branches') %} is-active{% endif %}" href="/admin/branches"{% if current_path.startswith('/admin/branches') %} aria-current="page"{% endif %}>{{ navigation_icon("branches") }}<span>Branch Management</span></a>
+            <a class="nav-item{% if current_path == '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users/create-branch-admin"{% if current_path == '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("user-add") }}<span>Create Branch Admin</span></a>
+          {% elif current_user.role.value == 'BRANCH_ADMIN' %}
+            <a class="nav-item{% if current_path.startswith('/admin/users') %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>Supervisor Management</span></a>
           {% endif %}
-          <a href="/auth/change-password">Change password</a>
-          <form method="post" action="/auth/logout" class="inline-form">
+          <a class="nav-item{% if current_path == '/auth/change-password' %} is-active{% endif %}" href="/auth/change-password"{% if current_path == '/auth/change-password' %} aria-current="page"{% endif %}>{{ navigation_icon("password") }}<span>Change Password</span></a>
+          <form method="post" action="/auth/logout" class="nav-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="link-button">Logout</button>
+            <button type="submit" class="nav-item nav-logout">{{ navigation_icon("logout") }}<span>Logout</span></button>
           </form>
         </nav>
       {% endif %}

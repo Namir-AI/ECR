@@ -8,10 +8,13 @@ from sqlalchemy.orm import Session
 from app.auth.models import UserSession
 from app.auth.passwords import PasswordManager
 from app.auth.sessions import revoke_all_user_sessions
+from app.branches.models import Branch
+from app.branches.services import get_active_branch, get_ho_kolkata
 from app.core.time import utc_now
 from app.users.models import PasswordResetRequest, User, UserRole, UserStatus
 from app.users.schemas import (
     SignupInput,
+    BranchAdminCreateInput,
     normalize_employee_id,
     normalize_full_name,
     normalize_mobile_number,
@@ -28,7 +31,7 @@ class UserActionError(ValueError):
 
 @dataclass(frozen=True)
 class AdminBootstrapInput:
-    """Validated values needed by the initial Admin command."""
+    """Validated values needed by the initial Superadmin command."""
 
     full_name: str
     employee_id: str
@@ -77,11 +80,14 @@ def create_supervisor(
     if conflict:
         raise UserConflictError(f"{conflict} is already registered.")
 
+    branch = get_active_branch(db, data.branch_id)
+
     user = User(
         full_name=data.full_name,
         employee_id=data.employee_id,
         mobile_number=data.mobile_number,
         email=data.email,
+        branch_id=branch.id,
         password_hash=password_manager.hash(data.password),
         role=UserRole.SUPERVISOR,
         status=UserStatus.PENDING,
@@ -170,13 +176,13 @@ def recover_admin_password(
     new_password: str,
     password_manager: PasswordManager,
 ) -> User:
-    """Reset an Admin password from trusted server-side recovery tooling."""
+    """Reset an administrator password from trusted server-side tooling."""
     normalized_employee_id = normalize_employee_id(employee_id)
     user = db.scalar(select(User).where(User.employee_id == normalized_employee_id))
     if user is None:
         raise UserActionError("No user exists with that Employee ID.")
-    if user.role is not UserRole.ADMIN:
-        raise UserActionError("The selected user is not an Admin.")
+    if user.role not in {UserRole.SUPERADMIN, UserRole.BRANCH_ADMIN}:
+        raise UserActionError("The selected user is not an administrator.")
 
     user.password_hash = password_manager.hash(new_password)
     user.must_change_password = False
@@ -228,15 +234,17 @@ def request_password_reset(db: Session, identifier: str) -> None:
         existing.requested_at = utc_now()
 
 
-def create_initial_admin(
+def create_initial_superadmin(
     db: Session,
     data: AdminBootstrapInput,
     password_manager: PasswordManager,
 ) -> User:
-    """Create the first active Admin and reject repeated bootstrapping."""
-    existing_admin = db.scalar(select(User.id).where(User.role == UserRole.ADMIN).limit(1))
+    """Create the first active Superadmin and reject repeated bootstrapping."""
+    existing_admin = db.scalar(
+        select(User.id).where(User.role == UserRole.SUPERADMIN).limit(1)
+    )
     if existing_admin is not None:
-        raise UserActionError("An Admin account already exists.")
+        raise UserActionError("A Superadmin account already exists.")
 
     full_name = normalize_full_name(data.full_name)
     employee_id = normalize_employee_id(data.employee_id)
@@ -251,19 +259,70 @@ def create_initial_admin(
     if conflict:
         raise UserConflictError(f"{conflict} is already registered.")
 
+    home_branch = get_ho_kolkata(db)
     admin = User(
         full_name=full_name,
         employee_id=employee_id,
         mobile_number=mobile_number,
         email=email,
+        branch_id=home_branch.id,
         password_hash=password_manager.hash(data.password),
-        role=UserRole.ADMIN,
+        role=UserRole.SUPERADMIN,
         status=UserStatus.ACTIVE,
         must_change_password=False,
     )
     db.add(admin)
     db.flush()
     return admin
+
+
+def create_initial_admin(
+    db: Session,
+    data: AdminBootstrapInput,
+    password_manager: PasswordManager,
+) -> User:
+    """Backward-compatible name for the Superadmin bootstrap service."""
+    return create_initial_superadmin(db, data, password_manager)
+
+
+def create_branch_admin(
+    db: Session,
+    data: BranchAdminCreateInput,
+    password_manager: PasswordManager,
+) -> User:
+    """Create an active Branch Admin with a forced temporary-password change."""
+    conflict = _existing_unique_field(
+        db,
+        employee_id=data.employee_id,
+        mobile_number=data.mobile_number,
+        email=data.email,
+    )
+    if conflict:
+        raise UserConflictError(f"{conflict} is already registered.")
+    branch = get_active_branch(db, data.branch_id)
+    user = User(
+        full_name=data.full_name,
+        employee_id=data.employee_id,
+        mobile_number=data.mobile_number,
+        email=data.email,
+        branch_id=branch.id,
+        password_hash=password_manager.hash(data.password),
+        role=UserRole.BRANCH_ADMIN,
+        status=UserStatus.ACTIVE,
+        must_change_password=True,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+def reassign_user_branch(db: Session, user: User, branch_id: int) -> Branch:
+    """Assign an active branch without changing a user's role."""
+    if user.role not in {UserRole.SUPERVISOR, UserRole.BRANCH_ADMIN}:
+        raise UserActionError("This user's branch cannot be reassigned.")
+    branch = get_active_branch(db, branch_id)
+    user.branch_id = branch.id
+    return branch
 
 
 def count_active_sessions(db: Session, user_id: int) -> int:

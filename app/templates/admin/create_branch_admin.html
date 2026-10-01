@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "components/password_field.html" import password_field %}
+{% block title %}Create Branch Admin — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card auth-card">
+  <div class="heading-row"><h1>Create Branch Admin</h1><a href="/admin/users">← Back</a></div>
+  <p>The account is activated immediately and must change its temporary password at first login.</p>
+  <form method="post" action="/admin/users/create-branch-admin">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Full Name<input name="full_name" value="{{ form.full_name or '' }}" maxlength="150" required autocomplete="name"></label>
+    <label>Employee ID<input name="employee_id" value="{{ form.employee_id or '' }}" maxlength="50" required autocomplete="username"></label>
+    <label>Mobile Number<input name="mobile_number" value="{{ form.mobile_number or '' }}" maxlength="30" required inputmode="tel" autocomplete="tel"></label>
+    <label>Email <span class="muted">(optional)</span><input type="email" name="email" value="{{ form.email or '' }}" maxlength="254" autocomplete="email"></label>
+    <label>Branch<select name="branch_id" required><option value="">Select branch</option>{% for branch in branches %}<option value="{{ branch.id }}" {% if form.branch_id|string == branch.id|string %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label>
+    {{ password_field("Temporary Password", "temporary_password", "new-password") }}
+    {{ password_field("Confirm Temporary Password", "confirm_password", "new-password") }}
+    <button type="submit">＋ Create Branch Admin</button>
+  </form>
+</section>
+{% endblock %}

@@ -15,6 +15,7 @@ from tests.conftest import csrf_from
 def test_user_creation_hashes_password_and_has_no_plaintext_column(
     db_session: Session,
     password_manager: PasswordManager,
+    branch_factory,
 ) -> None:
     plaintext = "Never-Store-This-123"
     data = SignupInput(
@@ -22,6 +23,7 @@ def test_user_creation_hashes_password_and_has_no_plaintext_column(
         employee_id="emp-1001",
         mobile_number="+91 98765-41001",
         email="Supervisor@example.com",
+        branch_id=branch_factory().id,
         password=plaintext,
         confirm_password=plaintext,
     )
@@ -47,6 +49,7 @@ def test_database_rejects_duplicate_required_identifiers(
     db_session: Session,
     password_manager: PasswordManager,
     field: str,
+    branch_factory,
 ) -> None:
     common = {
         "employee_id": "EMP-DUPLICATE",
@@ -59,6 +62,7 @@ def test_database_rejects_duplicate_required_identifiers(
         role=UserRole.SUPERVISOR,
         status=UserStatus.PENDING,
         must_change_password=False,
+        branch_id=branch_factory().id,
         **common,
     )
     db_session.add(first)
@@ -77,6 +81,7 @@ def test_database_rejects_duplicate_required_identifiers(
             role=UserRole.SUPERVISOR,
             status=UserStatus.PENDING,
             must_change_password=False,
+            branch_id=branch_factory().id,
             **second_values,
         )
     )
@@ -85,7 +90,8 @@ def test_database_rejects_duplicate_required_identifiers(
     db_session.rollback()
 
 
-def test_signup_page_creates_pending_supervisor(client, db_session: Session) -> None:
+def test_signup_page_creates_pending_supervisor(client, db_session: Session, branch_factory) -> None:
+    branch = branch_factory(code="DELHI")
     page = client.get("/auth/signup")
     csrf_token = csrf_from(page.text)
     response = client.post(
@@ -96,8 +102,10 @@ def test_signup_page_creates_pending_supervisor(client, db_session: Session) -> 
             "employee_id": "emp-signup-1",
             "mobile_number": "+919876540001",
             "email": "new.supervisor@example.com",
+            "branch_id": str(branch.id),
             "password": "Signup-Password-001",
             "confirm_password": "Signup-Password-001",
+            "role": "SUPERADMIN",
         },
     )
 
@@ -106,6 +114,7 @@ def test_signup_page_creates_pending_supervisor(client, db_session: Session) -> 
     assert user is not None
     assert user.status is UserStatus.PENDING
     assert user.role is UserRole.SUPERVISOR
+    assert user.branch_id == branch.id
 
 
 @pytest.mark.parametrize(
@@ -121,6 +130,7 @@ def test_signup_rejects_duplicate_employee_or_mobile(
     employee_id: str,
     mobile_number: str,
     expected: str,
+    branch_factory,
 ) -> None:
     user_factory(employee_id="EMP-EXISTING", mobile_number="+919876540010")
     page = client.get("/auth/signup")
@@ -132,6 +142,7 @@ def test_signup_rejects_duplicate_employee_or_mobile(
             "employee_id": employee_id,
             "mobile_number": mobile_number,
             "email": "",
+            "branch_id": str(branch_factory().id),
             "password": "Signup-Password-001",
             "confirm_password": "Signup-Password-001",
         },
@@ -141,7 +152,7 @@ def test_signup_rejects_duplicate_employee_or_mobile(
     assert expected in response.text
 
 
-def test_signup_rejects_password_confirmation_mismatch(client) -> None:
+def test_signup_rejects_password_confirmation_mismatch(client, branch_factory) -> None:
     page = client.get("/auth/signup")
     response = client.post(
         "/auth/signup",
@@ -151,6 +162,7 @@ def test_signup_rejects_password_confirmation_mismatch(client) -> None:
             "employee_id": "EMP-MISMATCH",
             "mobile_number": "+919876540020",
             "email": "",
+            "branch_id": str(branch_factory().id),
             "password": "Signup-Password-001",
             "confirm_password": "Signup-Password-002",
         },

@@ -14,13 +14,15 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.auth.models import UserSession
+    from app.branches.models import Branch
 
 
 class UserRole(StrEnum):
     """Roles approved for the current application phase."""
 
     SUPERVISOR = "SUPERVISOR"
-    ADMIN = "ADMIN"
+    BRANCH_ADMIN = "BRANCH_ADMIN"
+    SUPERADMIN = "SUPERADMIN"
 
 
 class UserStatus(StrEnum):
@@ -37,6 +39,7 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         Index("ix_users_role_status", "role", "status"),
+        Index("ix_users_branch_role_status", "branch_id", "role", "status"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -44,6 +47,12 @@ class User(Base):
     employee_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     mobile_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    branch_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("branches.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         Enum(
@@ -86,6 +95,8 @@ class User(Base):
         onupdate=utc_now,
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    branch: Mapped[Branch] = relationship(back_populates="users")
 
     sessions: Mapped[list[UserSession]] = relationship(
         back_populates="user",

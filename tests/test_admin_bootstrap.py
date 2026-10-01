@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.users.create_admin import run_interactive
+from app.users.create_superadmin import run_interactive
 from app.users.models import User, UserRole, UserStatus
 
 
@@ -15,7 +15,7 @@ def test_admin_bootstrap_creates_active_admin_without_printing_password(
     capsys,
 ) -> None:
     db_session.execute(
-        update(User).where(User.role == UserRole.ADMIN).values(role=UserRole.SUPERVISOR)
+        update(User).where(User.role == UserRole.SUPERADMIN).values(role=UserRole.SUPERVISOR)
     )
     db_session.flush()
     connection = db_session.connection()
@@ -48,7 +48,8 @@ def test_admin_bootstrap_creates_active_admin_without_printing_password(
     assert password not in output
     admin = db_session.scalar(select(User).where(User.employee_id == employee_id))
     assert admin is not None
-    assert admin.role is UserRole.ADMIN
+    assert admin.role is UserRole.SUPERADMIN
+    assert admin.branch.code == "HO-KOL"
     assert admin.status is UserStatus.ACTIVE
     assert admin.password_hash != password
 
@@ -61,4 +62,4 @@ def test_admin_bootstrap_creates_active_admin_without_printing_password(
         password_fn=lambda _prompt: "Another-Secret-002",
     )
     assert duplicate_result == 1
-    assert db_session.scalars(select(User).where(User.role == UserRole.ADMIN)).all() == [admin]
+    assert db_session.scalars(select(User).where(User.role == UserRole.SUPERADMIN)).all() == [admin]

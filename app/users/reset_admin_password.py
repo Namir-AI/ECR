@@ -19,9 +19,9 @@ def run_interactive(
     password_fn: Callable[[str], str] = getpass.getpass,
     password_manager: PasswordManager | None = None,
 ) -> int:
-    """Prompt securely and reset one existing Admin password."""
-    print("Reset existing Admin password")
-    employee_id = input_fn("Admin Employee ID: ").strip()
+    """Prompt securely and reset one existing administrator password."""
+    print("Reset existing administrator password")
+    employee_id = input_fn("Administrator Employee ID: ").strip()
     new_password = password_fn("New password: ")
     confirmation = password_fn("Confirm new password: ")
 

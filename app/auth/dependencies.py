@@ -59,14 +59,34 @@ def require_password_ready_user(user: AuthenticatedUser) -> User:
 PasswordReadyUser = Annotated[User, Depends(require_password_ready_user)]
 
 
-def require_admin(user: PasswordReadyUser) -> User:
-    """Enforce the current Admin role on the server side."""
-    if user.role is not UserRole.ADMIN:
+def require_superadmin(user: PasswordReadyUser) -> User:
+    """Require global Superadmin authority."""
+    if user.role is not UserRole.SUPERADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return user
 
 
-AdminUser = Annotated[User, Depends(require_admin)]
+SuperadminUser = Annotated[User, Depends(require_superadmin)]
+
+
+def require_branch_admin_or_superadmin(user: PasswordReadyUser) -> User:
+    """Require an administrator with either global or branch scope."""
+    if user.role not in {UserRole.SUPERADMIN, UserRole.BRANCH_ADMIN}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return user
+
+
+ManagementAdmin = Annotated[User, Depends(require_branch_admin_or_superadmin)]
+
+
+def require_supervisor(user: PasswordReadyUser) -> User:
+    """Require the Supervisor role for future supervisor-only routes."""
+    if user.role is not UserRole.SUPERVISOR:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return user
+
+
+SupervisorUser = Annotated[User, Depends(require_supervisor)]
 
 
 def get_authenticated_session(request: Request) -> UserSession | None:

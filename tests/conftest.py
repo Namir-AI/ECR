@@ -6,10 +6,11 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Connection
+from sqlalchemy import Connection, select
 from sqlalchemy.orm import Session
 
 from app.auth.passwords import PasswordManager
+from app.branches.models import Branch
 from app.core.config import AppSettings
 from app.db.session import get_db_session, get_engine
 from app.main import create_app
@@ -61,9 +62,33 @@ def password_manager(app_settings: AppSettings) -> PasswordManager:
 
 
 @pytest.fixture
+def branch_factory(db_session: Session) -> Callable[..., Branch]:
+    def get_or_create(
+        *,
+        code: str = "HO-KOL",
+        name: str | None = None,
+        is_active: bool = True,
+    ) -> Branch:
+        branch = db_session.scalar(select(Branch).where(Branch.code == code))
+        if branch is None:
+            branch = Branch(
+                code=code,
+                name=name or code.title(),
+                normalized_name=(name or code.title()).casefold(),
+                is_active=is_active,
+            )
+            db_session.add(branch)
+            db_session.commit()
+        return branch
+
+    return get_or_create
+
+
+@pytest.fixture
 def user_factory(
     db_session: Session,
     password_manager: PasswordManager,
+    branch_factory: Callable[..., Branch],
 ) -> Callable[..., User]:
     def create_user(
         *,
@@ -73,6 +98,7 @@ def user_factory(
         password: str = "Correct-Horse-123",
         employee_id: str | None = None,
         mobile_number: str | None = None,
+        branch: Branch | None = None,
     ) -> User:
         suffix = uuid4().hex[:10].upper()
         user = User(
@@ -80,6 +106,7 @@ def user_factory(
             employee_id=employee_id or f"EMP-{suffix}",
             mobile_number=mobile_number or f"+91{int(uuid4().hex[:10], 16) % 10**10:010d}",
             email=f"{suffix.lower()}@example.invalid",
+            branch_id=(branch or branch_factory()).id,
             password_hash=password_manager.hash(password),
             role=role,
             status=status,

@@ -4,7 +4,7 @@
 {% block content %}
 <section class="card auth-card">
   <h1>Supervisor Sign Up</h1>
-  <p>Your account will require Admin activation before you can log in.</p>
+  <p>Your account will require administrator activation before you can log in.</p>
   <form method="post" action="/auth/signup">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label>Full Name
@@ -18,6 +18,14 @@
     </label>
     <label>Email <span class="muted">(optional)</span>
       <input type="email" name="email" value="{{ form.email or '' }}" maxlength="254" autocomplete="email">
+    </label>
+    <label>Branch
+      <select name="branch_id" required>
+        <option value="">Select branch</option>
+        {% for branch in branches %}
+          <option value="{{ branch.id }}" {% if form.branch_id|string == branch.id|string %}selected{% endif %}>{{ branch.name }}</option>
+        {% endfor %}
+      </select>
     </label>
     {{ password_field("Password", "password", "new-password") }}
     {{ password_field("Confirm Password", "confirm_password", "new-password") }}

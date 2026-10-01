@@ -34,7 +34,7 @@ def test_admin_self_recovery_replaces_password_revokes_sessions_and_clears_state
     old_password = "Old-Admin-Password-001"
     new_password = "New-Admin-Password-002"
     admin = user_factory(
-        role=UserRole.ADMIN,
+        role=UserRole.SUPERADMIN,
         employee_id="ADMIN-SELF-RECOVERY",
         password=old_password,
         must_change_password=True,
@@ -102,7 +102,7 @@ def test_admin_self_recovery_rejects_non_admin_without_exposing_password(
     db_session.refresh(supervisor)
 
     assert result == 1
-    assert "not an Admin" in output
+    assert "not an administrator" in output
     assert proposed_password not in output
     assert supervisor.password_hash == original_hash
 
@@ -126,3 +126,29 @@ def test_admin_self_recovery_rejects_nonexistent_user_without_exposing_password(
     assert result == 1
     assert "No user exists" in output
     assert proposed_password not in output
+
+
+def test_admin_self_recovery_supports_branch_admin(
+    db_session: Session,
+    user_factory,
+    password_manager,
+    capsys,
+) -> None:
+    admin = user_factory(
+        role=UserRole.BRANCH_ADMIN,
+        employee_id="BRANCH-ADMIN-RECOVERY",
+        password="Old-Branch-Admin-001",
+    )
+    new_password = "New-Branch-Admin-002"
+    passwords = _password_prompts(new_password)
+    result = run_interactive(
+        _session_factory(db_session),
+        input_fn=lambda _prompt: admin.employee_id,
+        password_fn=lambda _prompt: next(passwords),
+        password_manager=password_manager,
+    )
+    output = capsys.readouterr().out
+    db_session.refresh(admin)
+    assert result == 0
+    assert new_password not in output
+    assert password_manager.verify(admin.password_hash, new_password)

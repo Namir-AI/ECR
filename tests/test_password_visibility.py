@@ -12,6 +12,11 @@ def _assert_password_controls(page_text: str, field_names: tuple[str, ...]) -> N
         assert f'aria-controls="{field_name}"' in page_text
         assert 'type="button"' in page_text
         assert 'aria-pressed="false"' in page_text
+        assert 'aria-label="Show password"' in page_text
+        assert "data-password-eye" in page_text
+        assert "data-password-eye-off" in page_text
+    assert ">Show</button>" not in page_text
+    assert ">Hide</button>" not in page_text
 
 
 def test_public_password_forms_have_masked_accessible_visibility_controls(client) -> None:
@@ -35,7 +40,7 @@ def test_authenticated_password_forms_reuse_visibility_controls(client, user_fac
     assert change_page.text.count("data-password-toggle") == 3
 
     client.cookies.clear()
-    admin = user_factory(role=UserRole.ADMIN, employee_id="ADMIN-PASSWORD-CONTROLS")
+    admin = user_factory(role=UserRole.SUPERADMIN, employee_id="ADMIN-PASSWORD-CONTROLS")
     target = user_factory(employee_id="EMP-RESET-CONTROLS")
     login(client, admin.employee_id)
     reset_page = client.get(f"/admin/users/{target.id}/reset-password")
@@ -51,4 +56,7 @@ def test_password_visibility_script_toggles_only_the_input_type(client) -> None:
 
     assert script.status_code == 200
     assert 'input.type = willShow ? "text" : "password"' in script.text
+    assert "eye.hidden = willShow" in script.text
+    assert "eyeOff.hidden = !willShow" in script.text
+    assert 'toggle.textContent = willShow ? "Hide" : "Show"' not in script.text
     assert ".value" not in script.text

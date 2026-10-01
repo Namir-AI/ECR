@@ -88,10 +88,10 @@ Apply all migrations:
 alembic upgrade head
 ```
 
-Downgrade Phase 2 to the Phase 1 baseline:
+Downgrade Phase 2A to the Phase 2 authentication baseline:
 
 ```bash
-alembic downgrade 20260928_01
+alembic downgrade 8ff13fa2d11c
 ```
 
 Reapply it:
@@ -100,25 +100,25 @@ Reapply it:
 alembic upgrade head
 ```
 
-Phase 1 contains an empty baseline revision. Phase 2 adds only the shared
-authentication and user tables. No ECR, Budget, or Bill business tables exist.
+Phase 2A adds the reusable branch hierarchy and scoped administrator roles.
+No ECR, Budget, or Bill business tables exist.
 
-## Create the initial Admin
+## Create the initial Superadmin
 
 After applying migrations, run the interactive bootstrap command:
 
 ```bash
-python -m app.users.create_admin
+python -m app.users.create_superadmin
 ```
 
-The command prompts for the required identity fields and uses hidden password
-input. It does not accept the password as a command-line argument or require it
-in `.env`.
+The command assigns HO-Kolkata as the home branch, prompts for required identity
+fields, and uses hidden password input. The legacy
+`python -m app.users.create_admin` command remains a compatibility wrapper.
 
 For localhost HTTP, `SESSION_SECURE_COOKIE=false` is permitted. Set it to
 `true` wherever the application is served over production HTTPS.
 
-If an existing Admin forgets their password, run the server-side interactive
+If an existing Superadmin or Branch Admin forgets their password, run the server-side interactive
 recovery command:
 
 ```bash
@@ -126,7 +126,7 @@ python -m app.users.reset_admin_password
 ```
 
 The command accepts no password argument. It uses hidden password prompts and
-revokes all existing sessions for the selected Admin.
+revokes all existing sessions for the selected administrator.
 
 ## Tests
 

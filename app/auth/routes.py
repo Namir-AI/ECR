@@ -16,6 +16,7 @@ from app.auth.sessions import (
     revoke_session_by_token,
     set_session_cookie,
 )
+from app.branches.services import BranchSelectionError, list_active_branches
 from app.core.templates import render_template
 from app.users.schemas import LoginInput, PasswordChangeInput, SignupInput
 from app.users.services import (
@@ -45,10 +46,14 @@ def _form_context(form: Any, *, error: str | None = None) -> dict[str, Any]:
 
 
 @router.get("/signup", name="signup_form")
-def signup_form(request: Request, user: OptionalUser) -> Response:
+def signup_form(request: Request, db: DatabaseSession, user: OptionalUser) -> Response:
     if user is not None:
         return RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-    return render_template(request, "auth/signup.html", _form_context({}))
+    return render_template(
+        request,
+        "auth/signup.html",
+        {**_form_context({}), "branches": list_active_branches(db)},
+    )
 
 
 @router.post("/signup", name="signup")
@@ -59,6 +64,7 @@ def signup(
     full_name: FormValue,
     employee_id: FormValue,
     mobile_number: FormValue,
+    branch_id: FormValue,
     email: Annotated[str, Form()] = "",
     password: FormValue = "",
     confirm_password: FormValue = "",
@@ -70,6 +76,7 @@ def signup(
         "employee_id": employee_id,
         "mobile_number": mobile_number,
         "email": email,
+        "branch_id": branch_id,
     }
     try:
         data = SignupInput(
@@ -83,15 +90,21 @@ def signup(
         return render_template(
             request,
             "auth/signup.html",
-            _form_context(form_values, error=_validation_message(exc)),
+            {
+                **_form_context(form_values, error=_validation_message(exc)),
+                "branches": list_active_branches(db),
+            },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-    except (PasswordPolicyError, UserConflictError) as exc:
+    except (PasswordPolicyError, UserConflictError, BranchSelectionError) as exc:
         db.rollback()
         return render_template(
             request,
             "auth/signup.html",
-            _form_context(form_values, error=str(exc)),
+            {
+                **_form_context(form_values, error=str(exc)),
+                "branches": list_active_branches(db),
+            },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     except IntegrityError:
@@ -99,10 +112,13 @@ def signup(
         return render_template(
             request,
             "auth/signup.html",
-            _form_context(
-                form_values,
-                error="Employee ID, Mobile Number, or Email is already registered.",
-            ),
+            {
+                **_form_context(
+                    form_values,
+                    error="Employee ID, Mobile Number, or Email is already registered.",
+                ),
+                "branches": list_active_branches(db),
+            },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 

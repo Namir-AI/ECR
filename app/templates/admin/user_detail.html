@@ -2,40 +2,29 @@
 {% block title %}User Details — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card">
-  <div class="heading-row"><h1>{{ user.full_name }}</h1><a href="/admin/users">Back to users</a></div>
+  <div class="heading-row"><h1>{{ user.full_name }}</h1><a href="/admin/users">← Back to users</a></div>
+  {% if user.status.value == 'DISABLED' %}<div class="account-disabled" role="status"><strong>Account disabled</strong><span>Login is blocked. Historical user information remains preserved.</span></div>{% endif %}
   <dl class="details-grid">
-    <dt>Employee ID</dt><dd>{{ user.employee_id }}</dd>
-    <dt>Mobile Number</dt><dd>{{ user.mobile_number }}</dd>
-    <dt>Email</dt><dd>{{ user.email or 'Not provided' }}</dd>
-    <dt>Role</dt><dd>{{ user.role.value }}</dd>
-    <dt>Status</dt><dd>{{ user.status.value }}</dd>
-    <dt>Registered</dt><dd>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
-    <dt>Last Login</dt><dd>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else 'Never' }}</dd>
-    <dt>Active Sessions</dt><dd>{{ active_session_count }}</dd>
+    <dt>Employee ID</dt><dd>{{ user.employee_id }}</dd><dt>Home Branch</dt><dd>{{ user.branch.name }}</dd>
+    <dt>Mobile Number</dt><dd>{{ user.mobile_number }}</dd><dt>Email</dt><dd>{{ user.email or 'Not provided' }}</dd>
+    <dt>Role</dt><dd>{{ "Super Admin" if user.role.value == "SUPERADMIN" else user.role.value.replace('_', ' ').title() }}</dd><dt>Status</dt><dd><span class="status-badge status-{{ user.status.value|lower }}">{{ user.status.value }}</span></dd>
+    <dt>Registered</dt><dd>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</dd><dt>Last Login</dt><dd>{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else 'Never' }}</dd>
+    <dt>Reset Requested</dt><dd>{{ 'Yes' if reset_requested else 'No' }}</dd><dt>Active Sessions</dt><dd>{{ active_session_count }}</dd>
     <dt>Password Change Required</dt><dd>{{ 'Yes' if user.must_change_password else 'No' }}</dd>
   </dl>
-  <div class="action-grid">
-    {% if user.status.value == 'PENDING' %}
-      <form method="post" action="/admin/users/{{ user.id }}/activate">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit">Activate user</button>
-      </form>
-    {% elif user.status.value == 'DISABLED' %}
-      <form method="post" action="/admin/users/{{ user.id }}/enable">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit">Re-enable user</button>
-      </form>
-    {% elif user.id != current_user.id %}
-      <form method="post" action="/admin/users/{{ user.id }}/disable">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="danger">Disable user</button>
-      </form>
-    {% endif %}
-    <a class="button secondary" href="/admin/users/{{ user.id }}/reset-password">Reset password</a>
-    <form method="post" action="/admin/users/{{ user.id }}/force-logout">
+  {% if current_user.role.value == 'SUPERADMIN' and user.role.value in ['SUPERVISOR', 'BRANCH_ADMIN'] %}
+    <form method="post" action="/admin/users/{{ user.id }}/branch" class="inline-management-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="secondary">Force logout</button>
+      <label>Change Home Branch<select name="branch_id" required>{% for branch in branches %}<option value="{{ branch.id }}" {% if branch.id == user.branch_id %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label>
+      <button type="submit" class="secondary">✎ Update branch</button>
     </form>
+  {% endif %}
+  <div class="action-grid">
+    {% if user.status.value == 'PENDING' %}<form method="post" action="/admin/users/{{ user.id }}/activate"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">✓ Activate user</button></form>
+    {% elif user.status.value == 'DISABLED' %}<form method="post" action="/admin/users/{{ user.id }}/enable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">↻ Re-enable user</button></form>
+    {% elif user.id != current_user.id %}<form method="post" action="/admin/users/{{ user.id }}/disable"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="danger">⊘ Disable user</button></form>{% endif %}
+    <a class="button secondary" href="/admin/users/{{ user.id }}/reset-password">🔑 Reset password</a>
+    <form method="post" action="/admin/users/{{ user.id }}/force-logout"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="secondary">⇥ Force logout</button></form>
   </div>
 </section>
 {% endblock %}

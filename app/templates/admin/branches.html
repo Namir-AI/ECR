@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Branch Management — Paharpur ECR{% endblock %}
+{% block content %}
+<div class="content-grid">
+  <section class="card"><h1>Branch Management</h1><div class="table-scroll"><table><thead><tr><th>Code</th><th>Display Name</th><th>Status</th></tr></thead><tbody>
+    {% for branch in branches %}<tr><td>{{ branch.code }}</td><td>{{ branch.name }}</td><td>{{ 'Active' if branch.is_active else 'Inactive' }}</td></tr>{% else %}<tr><td colspan="3">No branches found.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  <section class="card compact-card"><h2>Create Branch</h2><form method="post" action="/admin/branches">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Branch Code<input name="code" value="{{ form.code or '' }}" maxlength="30" required></label>
+    <label>Display Name<input name="name" value="{{ form.name or '' }}" maxlength="100" required></label>
+    <button type="submit">＋ Create branch</button>
+  </form></section>
+</div>
+{% endblock %}

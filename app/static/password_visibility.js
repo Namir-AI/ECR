@@ -15,7 +15,12 @@ document.addEventListener("click", (event) => {
   input.type = willShow ? "text" : "password";
 
   const label = willShow ? toggle.dataset.hideLabel : toggle.dataset.showLabel;
-  toggle.textContent = willShow ? "Hide" : "Show";
+  const eye = toggle.querySelector("[data-password-eye]");
+  const eyeOff = toggle.querySelector("[data-password-eye-off]");
+  if (eye && eyeOff) {
+    eye.hidden = willShow;
+    eyeOff.hidden = !willShow;
+  }
   toggle.setAttribute("aria-label", label);
   toggle.setAttribute("title", label);
   toggle.setAttribute("aria-pressed", String(willShow));

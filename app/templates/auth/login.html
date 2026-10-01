@@ -5,7 +5,7 @@
 <section class="card auth-card">
   <h1>Login</h1>
   {% if registered %}
-    <div class="alert alert-success" role="status">Registration received. An Admin must activate your account before login.</div>
+    <div class="alert alert-success" role="status">Registration received. An authorized administrator must activate your account before login.</div>
   {% endif %}
   <form method="post" action="/auth/login">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

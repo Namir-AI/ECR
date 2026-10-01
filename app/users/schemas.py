@@ -36,6 +36,7 @@ class SignupInput(BaseModel):
     employee_id: str = Field(min_length=1, max_length=50)
     mobile_number: str = Field(min_length=1, max_length=30)
     email: EmailStr | None = None
+    branch_id: int = Field(gt=0)
     password: str
     confirm_password: str
 
@@ -113,3 +114,10 @@ class AdminPasswordResetInput(BaseModel):
         if self.temporary_password != self.confirm_password:
             raise ValueError("Temporary passwords do not match.")
         return self
+
+
+class BranchAdminCreateInput(SignupInput):
+    """Superadmin-only Branch Admin creation input."""
+
+    password: str
+    confirm_password: str

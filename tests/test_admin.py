@@ -28,7 +28,7 @@ def test_admin_can_activate_disable_and_reenable_user(
     db_session: Session,
     user_factory,
 ) -> None:
-    admin = user_factory(role=UserRole.ADMIN, employee_id="ADMIN-STATUS")
+    admin = user_factory(role=UserRole.SUPERADMIN, employee_id="ADMIN-STATUS")
     target = user_factory(status=UserStatus.PENDING, employee_id="EMP-STATUS")
     csrf_token = _admin_csrf(client, admin.employee_id)
     detail_page = client.get(f"/admin/users/{target.id}")
@@ -80,7 +80,7 @@ def test_disabled_user_cannot_authenticate_or_use_existing_session(
     target_token = login(client, target.employee_id)
     client.cookies.clear()
 
-    admin = user_factory(role=UserRole.ADMIN, employee_id="ADMIN-DISABLE")
+    admin = user_factory(role=UserRole.SUPERADMIN, employee_id="ADMIN-DISABLE")
     csrf_token = _admin_csrf(client, admin.employee_id)
     response = client.post(
         f"/admin/users/{target.id}/disable",
@@ -118,7 +118,7 @@ def test_admin_password_reset_sets_flag_revokes_sessions_and_resolves_request(
     db_session.commit()
     client.cookies.clear()
 
-    admin = user_factory(role=UserRole.ADMIN, employee_id="ADMIN-RESET")
+    admin = user_factory(role=UserRole.SUPERADMIN, employee_id="ADMIN-RESET")
     _admin_csrf(client, admin.employee_id)
     form = client.get(f"/admin/users/{target.id}/reset-password")
     temporary_password = "Temporary-Reset-999"
@@ -165,7 +165,7 @@ def test_admin_force_logout_revokes_all_target_sessions(
     second_token = login(client, target.employee_id)
     client.cookies.clear()
 
-    admin = user_factory(role=UserRole.ADMIN, employee_id="ADMIN-FORCE-LOGOUT")
+    admin = user_factory(role=UserRole.SUPERADMIN, employee_id="ADMIN-FORCE-LOGOUT")
     csrf_token = _admin_csrf(client, admin.employee_id)
     response = client.post(
         f"/admin/users/{target.id}/force-logout",
