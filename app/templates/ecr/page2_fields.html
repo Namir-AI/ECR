@@ -1,0 +1,24 @@
+<input type="hidden" name="page2_present" value="1">
+{% for section, fields in page2_sections %}
+<details class="technical-section" open{% if section in ['Bearing Housing', 'Belt & Pulleys'] %} data-conditional-section="{{ section }}"{% if section not in applicable_sections %} hidden{% endif %}{% endif %}>
+  <summary>{{ section }}</summary>
+  <div class="form-grid technical-fields">
+    {% for name, label, kind, extra in fields %}
+    <label for="{{ name }}" class="form-field"><span class="field-label">{{ label }}{% if name in page2_final_required_fields %}<span data-final-required{% if name not in page2_required_fields %} hidden{% endif %}> *</span>{% endif %}{% if kind in ['number', 'integer'] %} <span class="field-unit">({{ extra }})</span>{% endif %}</span>
+      {% if kind == 'select' %}
+      <select class="form-control" id="{{ name }}" name="{{ name }}" data-page2-field>
+        <option value=""{% if not page2_values[name] %} selected{% endif %}>Select…</option>
+        {% for option in extra %}<option value="{{ option }}"{% if page2_values[name] == option %} selected{% endif %}>{{ option }}</option>{% endfor %}
+      </select>
+      {% else %}
+      <input class="form-control" id="{{ name }}" name="{{ name }}" data-page2-field
+        type="{{ 'number' if kind in ['number', 'integer'] else 'text' }}"
+        {% if kind == 'number' %}step="any" min="0" inputmode="decimal" data-decimal data-nonnegative-decimal{% elif kind == 'integer' %}step="1" min="1" inputmode="numeric" data-integer data-nonnegative-integer{% else %}maxlength="250"{% endif %}
+        value="{{ page2_values[name] }}">
+      {% endif %}
+      {% if name == 'oil_seal_leakage' %}<span class="muted">Yes = leakage observed</span>{% endif %}
+    </label>
+    {% endfor %}
+  </div>
+</details>
+{% endfor %}

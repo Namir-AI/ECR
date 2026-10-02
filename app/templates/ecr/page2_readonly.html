@@ -1,0 +1,10 @@
+{% for section, fields in page2_sections %}
+<section class="card">
+  <h2>{{ section }}</h2>
+  <dl class="details-grid">
+    {% for name, label, kind, extra in fields %}
+    <dt>{{ label }}</dt><dd>{{ page2_values[name] if page2_values[name] != '' else 'Not entered' }}{% if page2_values[name] != '' and kind in ['number', 'integer'] %} {{ extra }}{% endif %}{% if name == 'oil_seal_leakage' %} <span class="muted">(Yes = leakage observed)</span>{% endif %}</dd>
+    {% endfor %}
+  </dl>
+</section>
+{% endfor %}

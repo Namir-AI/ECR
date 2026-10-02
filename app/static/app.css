@@ -142,6 +142,12 @@ legend { padding-inline: 0.4rem; font-weight: 750; }
 .blade-serial-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: end; margin-bottom: 0.75rem; }
 .technical-fields input, .technical-fields select { min-width: 0; }
 .ecr-form-card .autosave-bar { position: sticky; top: 0.5rem; z-index: 2; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; background: white; box-shadow: 0 0.2rem 0.6rem #00000012; }
+.confirmation-dialog { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--border); border-top: 0.3rem solid var(--brand-primary); border-radius: 0.75rem; color: var(--text); background: var(--surface); box-shadow: 0 1.25rem 4rem #17212b40; }
+.confirmation-dialog::backdrop { background: #17212b99; }
+.confirmation-dialog h2 { margin-top: 0; font-size: 1.3rem; }
+.confirmation-dialog p { line-height: 1.6; overflow-wrap: anywhere; }
+.confirmation-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
+.confirmation-actions button { flex: 1 1 9rem; }
 
 @media (max-width: 42rem) {
   .site-header { align-items: stretch; flex-direction: column; gap: 0.55rem; padding-inline: 0.75rem; }

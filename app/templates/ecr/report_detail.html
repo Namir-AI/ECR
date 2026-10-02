@@ -2,7 +2,7 @@
 {% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card">
-  <div class="heading-row"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div><a href="/reports">Back to reports</a></div>
+  <div class="heading-row"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div><a href="{{ back_url | default('/reports') }}">Back to reports</a></div>
   <dl class="details-grid">
     <dt>Status</dt><dd><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></dd>
     <dt>Branch</dt><dd>{{ report.branch.name }}</dd>
@@ -21,5 +21,7 @@
     <dt>Last Updated</dt><dd>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</dd>
   </dl>
 </section>
+{% if not series_known %}<p class="muted">Legacy Cooling Tower Series: drivetrain applicability is unclassified. Saved data is preserved.</p>{% endif %}
 {% include "ecr/page1_readonly.html" %}
+{% include "ecr/page2_readonly.html" %}
 {% endblock %}

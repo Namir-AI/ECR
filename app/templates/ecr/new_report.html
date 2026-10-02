@@ -33,7 +33,7 @@
         <div class="form-grid">
           <label>Customer<input name="customer" value="{{ form.customer or '' }}" maxlength="200" required></label>
           <label>Customer Order No. <span class="muted">(optional)</span><input name="customer_order_no" value="{{ form.customer_order_no or '' }}" maxlength="100"></label>
-          <label>Cooling Tower Series<input name="cooling_tower_series" value="{{ form.cooling_tower_series or '' }}" maxlength="100" required></label>
+          <label>Cooling Tower Series<select name="cooling_tower_series" data-confirm-series required><option value="">Select…</option>{% for series in series_options %}<option value="{{ series }}"{% if form.cooling_tower_series == series %} selected{% endif %}>{{ series }}</option>{% endfor %}</select></label>
           <label>Model<input name="model" value="{{ form.model or '' }}" maxlength="100" required></label>
           <label class="form-grid-wide">Place of Installation<input name="place_of_installation" value="{{ form.place_of_installation or '' }}" maxlength="250" required></label>
           <label>Multiple Towers?
@@ -65,6 +65,7 @@
     </fieldset>
     <button type="submit">Create or Resume Draft</button>
   </form>
+  {% if not package %}{% include "ecr/series_confirmation.html" %}{% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/new_report.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/new_report.js') }}" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script>{% endblock %}

@@ -191,6 +191,9 @@ class EcrReport(Base):
     page1: Mapped[EcrPage1Technical | None] = relationship(
         back_populates="report", uselist=False
     )
+    page2: Mapped[EcrPage2Technical | None] = relationship(
+        back_populates="report", uselist=False
+    )
 
     @property
     def display_identity(self) -> str:
@@ -270,3 +273,42 @@ class EcrFanBladeSerial(Base):
     position: Mapped[int] = mapped_column(BigInteger)
     serial_no: Mapped[str] = mapped_column(String(250))
     technical: Mapped[EcrPage1Technical] = relationship(back_populates="blade_serials")
+
+
+class EcrPage2Technical(Base):
+    """Page 2 Batch A+B only; nullable Draft capture without defaults."""
+
+    __tablename__ = "ecr_page2_technical"
+    __table_args__ = (
+        CheckConstraint("fc_valve_diameter >= 0", name="valve_diameter_nonnegative"),
+        CheckConstraint("small_pulley_od >= 0", name="small_pulley_nonnegative"),
+        CheckConstraint("large_pulley_od >= 0", name="large_pulley_nonnegative"),
+        CheckConstraint("fc_valve_count > 0", name="valve_count_positive"),
+        CheckConstraint("nozzle_count_per_cell > 0", name="nozzle_count_positive"),
+        CheckConstraint("belts_used_count > 0", name="belt_count_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ecr_reports.id", ondelete="RESTRICT"), unique=True
+    )
+    eliminator_type: Mapped[str | None] = mapped_column(String(250))
+    fc_valve_diameter: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    fc_valve_count: Mapped[int | None] = mapped_column(BigInteger)
+    nozzle_type: Mapped[str | None] = mapped_column(String(250))
+    nozzle_count_per_cell: Mapped[int | None] = mapped_column(BigInteger)
+    nozzle_part_no: Mapped[str | None] = mapped_column(String(250))
+    bearing_housing_type: Mapped[str | None] = mapped_column(String(250))
+    bearing_housing_serial_no: Mapped[str | None] = mapped_column(String(250))
+    belt_type: Mapped[str | None] = mapped_column(String(250))
+    belt_section_length: Mapped[str | None] = mapped_column(String(250))
+    small_pulley_od: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    large_pulley_od: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    belts_used_count: Mapped[int | None] = mapped_column(BigInteger)
+    uniform_belt_tension: Mapped[str | None] = mapped_column(String(20))
+    pulley_construction: Mapped[str | None] = mapped_column(String(30))
+    oil_type: Mapped[str | None] = mapped_column(String(250))
+    oil_level_checked: Mapped[str | None] = mapped_column(String(20))
+    oil_seal_leakage: Mapped[str | None] = mapped_column(String(20))
+    general_tower_hardware: Mapped[str | None] = mapped_column(String(20))
+    report: Mapped[EcrReport] = relationship(back_populates="page2")

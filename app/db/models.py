@@ -6,6 +6,7 @@ from app.ecr.models import (
     EcrFanBladeSerial,
     EcrPackage,
     EcrPage1Technical,
+    EcrPage2Technical,
     EcrReport,
     EcrTower,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "EcrFanBladeSerial",
     "EcrPackage",
     "EcrPage1Technical",
+    "EcrPage2Technical",
     "EcrReport",
     "EcrTower",
     "PasswordResetRequest",

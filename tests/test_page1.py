@@ -238,7 +238,9 @@ def test_new_form_has_no_technical_defaults(client, technical_draft):
     parser.feed(client.get(f"/ecr/reports/{report.id}/edit").text)
     assert all(field["value"] == "" for field in parser.inputs.values())
     assert all("required" not in field for field in parser.inputs.values())
-    for choices in parser.selects.values():
+    for name, choices in parser.selects.items():
+        if name not in Page1DraftInput.model_fields:
+            continue  # Package Series is stored identity, not a technical default.
         assert [c["value"] for c in choices if "selected" in c] == [""]
     for name in ["gearbox_series", "gearbox_ratio"]:
         assert parser.inputs[name]["type"] == "text"

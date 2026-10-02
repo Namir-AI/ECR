@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.ecr.models import EcrFanBladeSerial, EcrPage1Technical, EcrReport
+from app.ecr.series import active_fields
 
 Text = Annotated[str, Field(max_length=250)]
 Number = Annotated[Decimal, Field(max_digits=38, decimal_places=18)]
@@ -221,6 +222,11 @@ def display_value(value) -> str:
     return str(value)
 
 
+def required_fields(series: str) -> frozenset[str]:
+    """Use applicable requiredness, not the unfiltered capture-schema metadata."""
+    return FINAL_REQUIRED_FIELDS & active_fields(SECTIONS, series)
+
+
 def page1_values(report: EcrReport) -> dict:
     record = report.page1
     values = {
@@ -259,7 +265,8 @@ def save_page1(db: Session, report: EcrReport, data: Page1DraftInput) -> None:
         record = EcrPage1Technical(report=report)
         db.add(record)
     for name, value in data.model_dump(exclude={"blade_serials"}).items():
-        setattr(record, name, value)
+        if name in active_fields(SECTIONS, report.tower.package.cooling_tower_series):
+            setattr(record, name, value)
     # Replace the ordered snapshot idempotently; flush removals before reusing positions.
     record.blade_serials.clear()
     db.flush()

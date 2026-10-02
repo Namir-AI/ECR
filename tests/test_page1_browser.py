@@ -382,7 +382,7 @@ def test_drive_shaft_series_dropdown_without_default_and_reload(draft_browser):
 def test_shared_control_height_and_label_alignment(draft_browser, tmp_path, width):
     page, _report = draft_browser
     page.set_viewport_size({"width": width, "height": 900})
-    controls = page.locator(".form-control").evaluate_all(
+    controls = page.locator(".form-control:visible").evaluate_all(
         "elements => elements.map(element => ({name: element.name, height: element.getBoundingClientRect().height, y: element.getBoundingClientRect().y}))"
     )
     assert (

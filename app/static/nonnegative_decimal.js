@@ -2,15 +2,15 @@
 
 const initializeNonnegativeDecimals = () => {
   // Plain decimal editing, never numeric coercion/abs() or locale conversion.
-  const decimal = /^(?:\d+(?:\.\d*)?|\.\d*|)$/;
-  document.querySelectorAll("[data-nonnegative-decimal]").forEach((field) => {
+  document.querySelectorAll("[data-nonnegative-decimal], [data-nonnegative-integer]").forEach((field) => {
+    const decimal = field.hasAttribute("data-nonnegative-integer") ? /^\d*$/ : /^(?:\d+(?:\.\d*)?|\.\d*|)$/;
     if (field.dataset.decimalGuardInitialized === "true") return;
     field.dataset.decimalGuardInitialized = "true";
     let lastValue = decimal.test(field.value) ? field.value : "";
 
     field.addEventListener("keydown", (event) => {
       // Preserve navigation, deletion, selection and clipboard shortcuts.
-      if (!event.ctrlKey && !event.metaKey && ["-", "+", "e", "E"].includes(event.key)) {
+      if (!event.ctrlKey && !event.metaKey && (["-", "+", "e", "E"].includes(event.key) || (field.hasAttribute("data-nonnegative-integer") && event.key === "."))) {
         event.preventDefault();
       }
     });

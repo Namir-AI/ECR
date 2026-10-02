@@ -1,11 +1,11 @@
 <input type="hidden" name="page1_present" value="1">
 <p class="muted">* Required for the completed ECR. Incomplete Drafts can be saved.</p>
 {% for section, fields in page1_sections %}
-<details class="technical-section" open>
+<details class="technical-section" open{% if section in ['Gearboxes', 'Drive Shafts'] %} data-conditional-section="{{ section }}"{% if section not in applicable_sections %} hidden{% endif %}{% endif %}>
   <summary>{{ section }}</summary>
   <div class="form-grid technical-fields">
     {% for name, label, kind, extra in fields %}
-    <label for="{{ name }}" class="form-field"><span class="field-label">{{ label }}{% if name in page1_required_fields %} *{% endif %}{% if kind in ['number', 'integer'] and extra and extra != label %} <span class="field-unit">({{ extra }})</span>{% endif %}</span>
+    <label for="{{ name }}" class="form-field"><span class="field-label">{{ label }}{% if name in page1_final_required_fields %}<span data-final-required{% if name not in page1_required_fields %} hidden{% endif %}> *</span>{% endif %}{% if kind in ['number', 'integer'] and extra and extra != label %} <span class="field-unit">({{ extra }})</span>{% endif %}</span>
       {% if kind == 'select' %}
       <select id="{{ name }}" name="{{ name }}" class="form-control" data-page1-field>
         <option value=""{% if not page1_values[name] %} selected{% endif %}>{{ 'Select unit…' if name == 'drive_shaft_oal_unit' else 'Select…' }}</option>

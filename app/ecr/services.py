@@ -13,6 +13,7 @@ from app.ecr.models import (
     EcrTower,
 )
 from app.ecr.schemas import DraftAutosaveInput, DraftCreateInput, normalized_serial_key
+from app.ecr.series import COOLING_TOWER_SERIES
 from app.users.models import User, UserRole
 
 
@@ -41,15 +42,29 @@ def _report_load_options():
         joinedload(EcrReport.supervisor),
         joinedload(EcrReport.branch),
         joinedload(EcrReport.page1).selectinload(EcrPage1Technical.blade_serials),
+        joinedload(EcrReport.page2),
     )
 
 
-def find_package_by_serial(db: Session, serial_no: str) -> EcrPackage | None:
-    return db.scalar(
-        select(EcrPackage).where(
-            EcrPackage.normalized_serial_no == normalized_serial_key(serial_no)
+def find_package_by_serial(
+    db: Session, serial_no: str, *, lock: bool = False
+) -> EcrPackage | None:
+    statement = select(EcrPackage).where(
+        EcrPackage.normalized_serial_no == normalized_serial_key(serial_no)
+    )
+    if lock:
+        # Do not gap-lock a missing serial: concurrent first creation is handled
+        # by the existing unique-constraint retry. Existing packages lock by PK.
+        existing = db.scalar(statement)
+        if existing is None:
+            return None
+        statement = (
+            select(EcrPackage)
+            .where(EcrPackage.id == existing.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-    )
+    return db.scalar(statement)
 
 
 def _validate_existing_package(package: EcrPackage, data: DraftCreateInput) -> None:
@@ -84,8 +99,12 @@ def create_or_resume_draft(
     """Create the requested hierarchy or safely resume the owner's existing Draft."""
     if supervisor.role is not UserRole.SUPERVISOR:
         raise EcrIdentityError("Only a Supervisor can create an E&C Draft.")
-    package = find_package_by_serial(db, data.cooling_tower_serial_no)
+    # Same package lock as Series edits: a concurrent second report cannot bypass
+    # the sole-Draft restriction. Lock order is always package, then report.
+    package = find_package_by_serial(db, data.cooling_tower_serial_no, lock=True)
     if package is None:
+        if data.cooling_tower_series not in COOLING_TOWER_SERIES:
+            raise EcrIdentityError("Select an approved Cooling Tower Series.")
         package = EcrPackage(
             cooling_tower_serial_no=data.cooling_tower_serial_no,
             normalized_serial_no=normalized_serial_key(data.cooling_tower_serial_no),
@@ -160,6 +179,22 @@ def create_or_resume_draft(
 def get_supervisor_report(
     db: Session, report_id: int, supervisor_id: int, *, lock: bool = False
 ) -> EcrReport | None:
+    if lock:
+        package_id = db.scalar(
+            select(EcrTower.package_id)
+            .join(EcrReport)
+            .where(
+                EcrReport.id == report_id, EcrReport.supervisor_user_id == supervisor_id
+            )
+        )
+        if package_id is None:
+            return None
+        db.scalar(
+            select(EcrPackage)
+            .where(EcrPackage.id == package_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     statement = (
         select(EcrReport)
         .options(*_report_load_options())
@@ -168,7 +203,42 @@ def get_supervisor_report(
             EcrReport.supervisor_user_id == supervisor_id,
         )
     )
-    return db.scalar(statement.with_for_update() if lock else statement)
+    return db.scalar(
+        statement.with_for_update().execution_options(populate_existing=True)
+        if lock
+        else statement
+    )
+
+
+def can_edit_series(
+    db: Session, report: EcrReport, user: User, *, lock: bool = False
+) -> bool:
+    package = report.tower.package
+    if (
+        user.role is not UserRole.SUPERVISOR
+        or package.created_by_user_id != user.id
+        or report.supervisor_user_id != user.id
+        or report.status is not EcrReportStatus.DRAFT
+    ):
+        return False
+    query = select(EcrReport.id).join(EcrTower).where(EcrTower.package_id == package.id)
+    # A locking/current read avoids an earlier MySQL REPEATABLE READ snapshot.
+    ids = list(db.scalars(query.with_for_update() if lock else query))
+    return ids == [report.id]
+
+
+def update_series(
+    db: Session, report: EcrReport, user: User, value: str | None
+) -> None:
+    if value is None or value == report.tower.package.cooling_tower_series:
+        return
+    if not can_edit_series(db, report, user, lock=True):
+        raise DraftNotEditableError(
+            "Cooling Tower Series is read-only for this package. Reload the report."
+        )
+    if value not in COOLING_TOWER_SERIES:
+        raise EcrIdentityError("Select an approved Cooling Tower Series.")
+    report.tower.package.cooling_tower_series = value
 
 
 def list_supervisor_reports(db: Session, supervisor_id: int) -> list[EcrReport]:

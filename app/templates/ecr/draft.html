@@ -7,22 +7,36 @@
     <dl class="details-grid compact-details">
       <dt>Customer</dt><dd>{{ report.tower.package.customer }}</dd>
       <dt>Customer Order No.</dt><dd>{{ report.tower.package.customer_order_no or 'Not provided' }}</dd>
-      <dt>Cooling Tower Series</dt><dd>{{ report.tower.package.cooling_tower_series }}</dd>
+      {% if not series_editable %}<dt>Cooling Tower Series</dt><dd>{{ report.tower.package.cooling_tower_series }} (read-only)</dd>{% endif %}
       <dt>Model</dt><dd>{{ report.tower.package.model }}</dd>
       <dt>Place of Installation</dt><dd>{{ report.tower.package.place_of_installation }}</dd>
       <dt>No. of Cells (this tower)</dt><dd>{{ report.tower.declared_no_of_cells or 'Not provided' }}</dd>
     </dl>
   </div>
-  <form method="post" action="/ecr/reports/{{ report.id }}/autosave" data-autosave-form>
+  <form method="post" action="/ecr/reports/{{ report.id }}/autosave" data-autosave-form data-series-state-url="/ecr/reports/{{ report.id }}/series-state" data-stored-series="{{ report.tower.package.cooling_tower_series }}" data-series-rules='{{ series_rules | tojson }}'>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="autosave-bar"><span class="autosave-status" data-autosave-status role="status" aria-live="polite">All changes saved</span><button type="submit" class="secondary" data-save-now>Save now</button></div>
+    <div class="autosave-bar"><span class="autosave-status" data-autosave-status role="status" aria-live="polite" tabindex="-1">All changes saved</span><button type="submit" class="secondary" data-save-now>Save now</button></div>
     <h2>Report Details</h2>
+    {% if not series_known %}<p class="muted">This stored Cooling Tower Series is a legacy value. Drivetrain applicability is unclassified; saved equipment data is preserved.</p>{% endif %}
+    {% if series_editable %}
+    <label class="form-field"><span class="field-label">Cooling Tower Series *</span>
+      <select class="form-control" name="cooling_tower_series" data-series-select data-confirm-series required>
+        {% if not series_known %}<option value="{{ report.tower.package.cooling_tower_series }}" selected disabled>{{ report.tower.package.cooling_tower_series }} (legacy — select an approved Series)</option>{% endif %}
+        <option value="">Select…</option>
+        {% for series in series_options %}<option value="{{ series }}"{% if series == report.tower.package.cooling_tower_series %} selected{% endif %}>{{ series }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="muted">Series can be changed only while this is your package’s sole Draft.</p>
+    {% endif %}
     <div class="form-grid">
       <label class="form-field"><span class="field-label">Erection Start Date <span class="muted">(optional)</span></span><input class="form-control" type="date" name="erection_start_date" value="{{ report.erection_start_date.isoformat() if report.erection_start_date else '' }}"></label>
       <label class="form-field"><span class="field-label">Erection Completion Date</span><input class="form-control" type="date" name="erection_completion_date" value="{{ report.erection_completion_date.isoformat() }}" required></label>
     </div>
     {% include "ecr/page1_fields.html" %}
+    <h2>Page 2 — Technical Data</h2>
+    {% include "ecr/page2_fields.html" %}
   </form>
+  {% if series_editable %}{% include "ecr/series_confirmation.html" %}{% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/nonnegative_decimal.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=3" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/nonnegative_decimal.js') }}?v=2" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=5" defer></script>{% endblock %}

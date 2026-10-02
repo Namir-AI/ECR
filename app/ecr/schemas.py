@@ -3,7 +3,9 @@
 import re
 from datetime import date
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+
+from app.ecr.series import COOLING_TOWER_SERIES
 
 
 def normalize_serial_display(value: str) -> str:
@@ -75,8 +77,13 @@ class DraftCreateInput(BaseModel):
 
     @field_validator("cooling_tower_series")
     @classmethod
-    def validate_series(cls, value: str) -> str:
-        return normalize_required_text(value, "Cooling Tower Series")
+    def validate_series(cls, value: str, info: ValidationInfo) -> str:
+        value = normalize_required_text(value, "Cooling Tower Series")
+        # Only the server may authorize unchanged reuse of an existing legacy value.
+        legacy = (info.context or {}).get("existing_series")
+        if value not in COOLING_TOWER_SERIES and value != legacy:
+            raise ValueError("Select an approved Cooling Tower Series.")
+        return value
 
     @field_validator("model")
     @classmethod

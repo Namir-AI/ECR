@@ -17,7 +17,7 @@
       <td>{{ report.tower.package.customer }}</td><td>{{ report.tower.package.model }}</td><td>{{ report.branch.name }}</td>
       <td>{{ report.erection_completion_date.isoformat() }}</td><td><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></td>
       <td>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
-      <td><a class="table-action" href="/ecr/reports/{{ report.id }}/edit">Continue / Edit</a></td>
+      <td>{% if report.status.value == 'DRAFT' %}<a class="table-action" href="/ecr/reports/{{ report.id }}/edit">Continue / Edit</a>{% endif %}<a class="table-action" href="/ecr/reports/{{ report.id }}">View</a></td>
     </tr>{% else %}<tr><td colspan="10" class="empty-state">No reports yet. Create your first E&amp;C Draft.</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>

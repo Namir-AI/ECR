@@ -168,9 +168,10 @@ historical branch scope. The visible label **Branch** retains snapshot semantics
 Final-optional fields are Motor Frame, Insulation and Mounting; Blade Sl. Nos.;
 Drive Shaft OAL and OAL Unit (optional as a pair); Gearbox Model No.; and Fill
 Type (Specify nomenclature). These have no required asterisk and may remain
-permanently blank. All other Page 1 fields are final-required. The schema's
-`final_required` metadata drives the asterisks and is the source for later final
-completeness rules; no submission/completeness workflow is implemented now.
+permanently blank. All other Page 1 fields are final-required **when their section
+applies**. The capture schema's `final_required` metadata is filtered through the
+Series applicability helpers for asterisks and future completeness rules;
+no submission/completeness workflow is implemented now.
 All technical columns remain nullable so incomplete Drafts can always be saved.
 
 When supplied, Full Load Current must be **strictly greater than 0 Amps** and
@@ -213,7 +214,8 @@ prescribed number of decimal places. Non-finite or out-of-capacity values are
 rejected, never silently rounded. No engineering acceptance warnings are added.
 Text fields hold up to 250 characters; integer counts use MySQL BIGINT capacity.
 
-For migration verification on an empty technical schema:
+For Phase 4A migration verification on an empty technical schema (not a populated
+installation, and not the Phase 4B1 round trip described below):
 
 ```bash
 alembic downgrade 3d6a1b8c4e20
@@ -225,6 +227,76 @@ alembic check
 **Downgrade removes Page 1 technical data**; it retains Phase 3 reports, packages,
 towers and common users/branches. Do not downgrade a populated installation
 without an appropriate backup and explicit authorization.
+
+## Phase 4B1 — Page 2 Batch A+B
+
+Migration `4b1a9c2d7e60` follows `4a8e2c7d901f` and adds only
+`ecr_page2_technical`, a one-to-one nullable scalar table for Eliminator, FC
+Valves, Nozzles, Bearing Housing, Belt & Pulleys, Lubricant for GRDR / Bearing
+Housing, and General Tower Hardware. Run `alembic upgrade head` before startup.
+Measurements use the existing `DECIMAL(38,18)` capacity; counts use BIGINT.
+Negative measurements, non-positive/fractional counts and unapproved choices are
+rejected; blanks remain valid in Drafts. No engineering defaults are supplied.
+Leakage **Yes means leakage observed**. General Tower Hardware is single-choice
+`HDG`, `SS304`, or `SS316`; `STL/HDG` is not an approved digital value.
+
+Cooling Tower Series uses these exact values, in this order:
+`AQ-3800`, `CF-I`, `CF-II`, `CF-III`, `6.1 KF`, `9 KF`, `RXF`, `Series 9`,
+`Series 10`, `Series 15`, `Series 18`. New selection starts blank.
+
+| Series | Gearbox / Drive Shaft | Bearing Housing / Belt & Pulleys |
+| --- | --- | --- |
+| AQ-3800 | Hidden | Applicable |
+| CF-I | Hidden | Hidden |
+| Other approved Series | Applicable | Hidden |
+
+All other Batch A+B sections apply to every approved Series. Only applicable
+fields participate in final-required metadata. Draft saves never enforce final
+completeness. Hidden sections are excluded from active saves and read-only
+presentation; their committed values are retained and reappear when applicable.
+Series is taken from the authoritative package, never a browser visibility flag.
+
+A Supervisor can edit Series **only** as the package creator while its only
+report belongs to that Supervisor and remains DRAFT. Creating a second report
+or leaving DRAFT locks Series. Creation and Series edits lock the package in a
+consistent order to enforce this even during concurrent requests. A shared
+package's technical Draft fields remain editable within existing ownership rules.
+The future audited SUPERADMIN-only shared-Series correction is deferred.
+
+Changing an already selected Cooling Tower Series requires a styled confirmation
+dialog. First selection needs no confirmation; Cancel or Escape keeps the prior
+selection, and Change Series passes the accepted value to the existing autosave
+controller. A rejected or uncertain Series save re-reads the owner's authoritative
+Series through a read-only, uncached endpoint; it restores that selection and
+keeps failure feedback visible. If reconciliation is unavailable, further writes
+require reload. Model remains read-only on the Draft page. No technical data is
+reset by confirming, cancelling or changing Series.
+
+Legacy Series strings are not rewritten. They remain safely readable/reusable
+unchanged. An unknown Series has unclassified drivetrain applicability: the UI
+explains this and preserves stored equipment data. An eligible sole-Draft creator
+may explicitly choose an approved Series. No mapping or destructive conversion
+occurs automatically.
+
+Batch A+B uses the existing autosave/Save now controller and commit confirmation,
+including stale-response protection. Branch Admins remain read-only within
+historical report branch scope; Superadmins have global read-only report access.
+
+For verification **only when the new Page 2 table is empty**:
+
+```bash
+alembic downgrade 4a8e2c7d901f
+alembic upgrade head
+alembic current
+alembic check
+pytest
+```
+
+Downgrade drops Batch A+B data only. Back up populated data before any deliberate
+downgrade; accepted Page 1, identity, users and branch tables are not modified.
+Batch C (torque, alignment/TIR, DE/NDE, switches), Page 3, workflow, attachments,
+search, PDF, final Gearbox lists and controlled post-submission Current Drawn
+correction remain deferred.
 
 Browser regressions use optional Playwright/Chromium tooling, separate from the
 application runtime and shared development virtual environment:
