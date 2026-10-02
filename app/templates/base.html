@@ -14,12 +14,15 @@
       {% if current_user %}
         {% set current_path = request.url.path %}
         <nav class="primary-nav" aria-label="Primary navigation">
-          <a class="nav-item{% if current_path == '/dashboard' %} is-active{% endif %}" href="/dashboard"{% if current_path == '/dashboard' %} aria-current="page"{% endif %}>{{ navigation_icon("dashboard") }}<span>Dashboard</span></a>
+          {% set dashboard_active = current_path == '/dashboard' or (current_user.role.value == 'SUPERVISOR' and current_path.startswith('/ecr/')) %}
+          <a class="nav-item{% if dashboard_active %} is-active{% endif %}" href="/dashboard"{% if dashboard_active %} aria-current="page"{% endif %}>{{ navigation_icon("dashboard") }}<span>Dashboard</span></a>
           {% if current_user.role.value == 'SUPERADMIN' %}
+            <a class="nav-item{% if current_path.startswith('/reports') %} is-active{% endif %}" href="/reports"{% if current_path.startswith('/reports') %} aria-current="page"{% endif %}>{{ navigation_icon("reports") }}<span>Reports</span></a>
             <a class="nav-item{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>User Management</span></a>
             <a class="nav-item{% if current_path.startswith('/admin/branches') %} is-active{% endif %}" href="/admin/branches"{% if current_path.startswith('/admin/branches') %} aria-current="page"{% endif %}>{{ navigation_icon("branches") }}<span>Branch Management</span></a>
             <a class="nav-item{% if current_path == '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users/create-branch-admin"{% if current_path == '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("user-add") }}<span>Create Branch Admin</span></a>
           {% elif current_user.role.value == 'BRANCH_ADMIN' %}
+            <a class="nav-item{% if current_path.startswith('/reports') %} is-active{% endif %}" href="/reports"{% if current_path.startswith('/reports') %} aria-current="page"{% endif %}>{{ navigation_icon("reports") }}<span>Reports</span></a>
             <a class="nav-item{% if current_path.startswith('/admin/users') %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>Supervisor Management</span></a>
           {% endif %}
           <a class="nav-item{% if current_path == '/auth/change-password' %} is-active{% endif %}" href="/auth/change-password"{% if current_path == '/auth/change-password' %} aria-current="page"{% endif %}>{{ navigation_icon("password") }}<span>Change Password</span></a>
@@ -35,5 +38,6 @@
       {% if message %}<div class="alert alert-success" role="status">{{ message }}</div>{% endif %}
       {% block content %}{% endblock %}
     </main>
+    {% block scripts %}{% endblock %}
   </body>
 </html>

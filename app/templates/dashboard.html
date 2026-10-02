@@ -8,6 +8,6 @@
     <div><dt>Role</dt><dd>{{ "Super Admin" if current_user.role.value == "SUPERADMIN" else current_user.role.value.replace('_', ' ').title() }}</dd></div>
     <div><dt>Home Branch</dt><dd>{{ current_user.branch.name }}</dd></div>
   </dl>
-  <p class="muted">The Erection & Commissioning dashboard will be implemented in Phase 3.</p>
+  <p class="muted">Use Reports to view Erection & Commissioning Draft identity and branch ownership.</p>
 </section>
 {% endblock %}

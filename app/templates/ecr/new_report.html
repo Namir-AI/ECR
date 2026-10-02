@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Report Identity — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card ecr-form-card">
+  <div class="heading-row"><div><h1>Report Identity</h1><p class="muted">Create or resume a cell-level Draft.</p></div><a href="/ecr/reports/new">Change serial number</a></div>
+  {% if package %}
+    <div class="reference-panel">
+      <strong>Existing Package — shared information is read-only</strong>
+      <dl class="details-grid compact-details">
+        <dt>Cooling Tower Serial No.</dt><dd>{{ package.cooling_tower_serial_no }}</dd>
+        <dt>Customer</dt><dd>{{ package.customer }}</dd>
+        <dt>Customer Order No.</dt><dd>{{ package.customer_order_no or 'Not provided' }}</dd>
+        <dt>Cooling Tower Series</dt><dd>{{ package.cooling_tower_series }}</dd>
+        <dt>Model</dt><dd>{{ package.model }}</dd>
+        <dt>Place of Installation</dt><dd>{{ package.place_of_installation }}</dd>
+        <dt>Multiple Towers?</dt><dd>{{ 'Yes' if package.multiple_towers else 'No' }}</dd>
+      </dl>
+    </div>
+  {% endif %}
+  <form method="post" action="/ecr/reports" data-new-report-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="cooling_tower_serial_no" value="{{ package.cooling_tower_serial_no if package else form.cooling_tower_serial_no }}">
+    {% if package %}
+      <input type="hidden" name="customer" value="{{ package.customer }}">
+      <input type="hidden" name="customer_order_no" value="{{ package.customer_order_no or '' }}">
+      <input type="hidden" name="cooling_tower_series" value="{{ package.cooling_tower_series }}">
+      <input type="hidden" name="model" value="{{ package.model }}">
+      <input type="hidden" name="place_of_installation" value="{{ package.place_of_installation }}">
+      <input type="hidden" name="multiple_towers" value="{{ 'true' if package.multiple_towers else 'false' }}" data-multiple-towers>
+    {% else %}
+      <fieldset>
+        <legend>Package Information</legend>
+        <div class="form-grid">
+          <label>Customer<input name="customer" value="{{ form.customer or '' }}" maxlength="200" required></label>
+          <label>Customer Order No. <span class="muted">(optional)</span><input name="customer_order_no" value="{{ form.customer_order_no or '' }}" maxlength="100"></label>
+          <label>Cooling Tower Series<input name="cooling_tower_series" value="{{ form.cooling_tower_series or '' }}" maxlength="100" required></label>
+          <label>Model<input name="model" value="{{ form.model or '' }}" maxlength="100" required></label>
+          <label class="form-grid-wide">Place of Installation<input name="place_of_installation" value="{{ form.place_of_installation or '' }}" maxlength="250" required></label>
+          <label>Multiple Towers?
+            <select name="multiple_towers" required data-multiple-towers>
+              <option value="">Select</option>
+              <option value="false" {% if form.multiple_towers == 'false' %}selected{% endif %}>No</option>
+              <option value="true" {% if form.multiple_towers == 'true' %}selected{% endif %}>Yes</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+    {% endif %}
+    <fieldset>
+      <legend>Tower and Cell</legend>
+      <div class="form-grid">
+        <label data-tower-suffix-row {% if (package and not package.multiple_towers) or (not package and form.multiple_towers != 'true') %}hidden{% endif %}>Tower Suffix
+          <input name="tower_suffix" value="{{ form.tower_suffix or '' }}" maxlength="20" pattern="[A-Za-z]+" {% if package and package.multiple_towers %}required{% endif %} data-tower-suffix>
+        </label>
+        <label>No. of Cells (this tower) <span class="muted">(optional)</span><input type="number" name="declared_no_of_cells" value="{{ form.declared_no_of_cells or '' }}" min="1" step="1" inputmode="numeric"></label>
+        <label>Cell No.<input type="number" name="cell_no" value="{{ form.cell_no or '' }}" min="1" step="1" inputmode="numeric" required></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Erection Dates</legend>
+      <div class="form-grid">
+        <label>Erection Start Date <span class="muted">(optional)</span><input type="date" name="erection_start_date" value="{{ form.erection_start_date or '' }}"></label>
+        <label>Erection Completion Date<input type="date" name="erection_completion_date" value="{{ form.erection_completion_date or '' }}" required></label>
+      </div>
+    </fieldset>
+    <button type="submit">Create or Resume Draft</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/new_report.js') }}" defer></script>{% endblock %}

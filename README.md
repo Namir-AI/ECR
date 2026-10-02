@@ -58,6 +58,7 @@ Then open:
 http://127.0.0.1:8000/health
 http://127.0.0.1:8000/auth/signup
 http://127.0.0.1:8000/auth/login
+http://127.0.0.1:8000/dashboard
 ```
 
 Expected response:
@@ -88,10 +89,10 @@ Apply all migrations:
 alembic upgrade head
 ```
 
-Downgrade Phase 2A to the Phase 2 authentication baseline:
+Downgrade Phase 3 to the Phase 2A branch-administration baseline:
 
 ```bash
-alembic downgrade 8ff13fa2d11c
+alembic downgrade 2a7c9e4b1d30
 ```
 
 Reapply it:
@@ -100,8 +101,21 @@ Reapply it:
 alembic upgrade head
 ```
 
-Phase 2A adds the reusable branch hierarchy and scoped administrator roles.
-No ECR, Budget, or Bill business tables exist.
+Phase 3 adds relational ECR Package, Tower, and Cell Report identity tables.
+No technical-form, attachment, Budget, or Bill tables exist.
+
+## Phase 3 Draft flow
+
+An active Supervisor can open the dashboard, select **New Erection &
+Commissioning Report**, identify or reuse a Cooling Tower Serial No., and create
+a cell-level Draft. The authenticated user and that user's branch at creation
+are recorded by the server; neither value is accepted from the browser.
+
+Draft erection dates autosave after changes and persist across reloads. A
+Supervisor sees only their own reports. Branch Admins can open the read-only
+Reports page for reports historically created in their branch, while the
+Superadmin can view all branches. Advanced technical data, submission,
+approval, attachments, and report search remain later-phase work.
 
 ## Create the initial Superadmin
 

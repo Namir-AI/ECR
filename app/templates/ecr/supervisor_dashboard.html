@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "components/navigation_icon.html" import navigation_icon %}
+{% block title %}Erection & Commissioning — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="dashboard-hero">
+  <div><p class="eyebrow">ERECTION &amp; COMMISSIONING</p><h1>Supervisor Dashboard</h1><p>Welcome, {{ current_user.full_name }} · {{ current_user.branch.name }}</p></div>
+  <a class="button primary-action" href="/ecr/reports/new">{{ navigation_icon("report-add") }}<span>New Erection &amp; Commissioning Report</span></a>
+</section>
+<section class="card">
+  <div class="heading-row"><div><h2>My Previous Reports</h2><p class="muted">Your reports remain visible here even after a future branch transfer.</p></div></div>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Cooling Tower Serial No.</th><th>Tower</th><th>Cell</th><th>Customer</th><th>Model</th><th>Historical Branch</th><th>Completion Date</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+    <tbody>{% for report in reports %}<tr>
+      <td>{{ report.tower.package.cooling_tower_serial_no }}</td>
+      <td>{{ report.tower.tower_suffix or 'Single tower' }}</td>
+      <td>Cell-{{ report.cell_no }}</td>
+      <td>{{ report.tower.package.customer }}</td><td>{{ report.tower.package.model }}</td><td>{{ report.branch.name }}</td>
+      <td>{{ report.erection_completion_date.isoformat() }}</td><td><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></td>
+      <td>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td><a class="table-action" href="/ecr/reports/{{ report.id }}/edit">Continue / Edit</a></td>
+    </tr>{% else %}<tr><td colspan="10" class="empty-state">No reports yet. Create your first E&amp;C Draft.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

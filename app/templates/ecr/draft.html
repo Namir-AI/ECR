@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card ecr-form-card">
+  <div class="heading-row"><div><p class="eyebrow">DRAFT</p><h1>{{ report.display_identity }}</h1><p class="muted">Owned by {{ report.supervisor.full_name }} · Historical Branch: {{ report.branch.name }}</p></div><a href="/dashboard">Back to dashboard</a></div>
+  <div class="reference-panel">
+    <dl class="details-grid compact-details">
+      <dt>Customer</dt><dd>{{ report.tower.package.customer }}</dd>
+      <dt>Customer Order No.</dt><dd>{{ report.tower.package.customer_order_no or 'Not provided' }}</dd>
+      <dt>Cooling Tower Series</dt><dd>{{ report.tower.package.cooling_tower_series }}</dd>
+      <dt>Model</dt><dd>{{ report.tower.package.model }}</dd>
+      <dt>Place of Installation</dt><dd>{{ report.tower.package.place_of_installation }}</dd>
+      <dt>No. of Cells (this tower)</dt><dd>{{ report.tower.declared_no_of_cells or 'Not provided' }}</dd>
+    </dl>
+  </div>
+  <form method="post" action="/ecr/reports/{{ report.id }}/autosave" data-autosave-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="form-grid">
+      <label>Erection Start Date <span class="muted">(optional)</span><input type="date" name="erection_start_date" value="{{ report.erection_start_date.isoformat() if report.erection_start_date else '' }}"></label>
+      <label>Erection Completion Date<input type="date" name="erection_completion_date" value="{{ report.erection_completion_date.isoformat() }}" required></label>
+    </div>
+    <div class="autosave-bar"><span class="autosave-status" data-autosave-status role="status" aria-live="polite">All changes saved</span><button type="submit" class="secondary" data-save-now>Save now</button></div>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=2" defer></script>{% endblock %}

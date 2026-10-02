@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="heading-row"><div><p class="eyebrow">READ-ONLY REPORT IDENTITY</p><h1>{{ report.display_identity }}</h1></div><a href="/reports">Back to reports</a></div>
+  <dl class="details-grid">
+    <dt>Status</dt><dd><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></dd>
+    <dt>Historical Branch</dt><dd>{{ report.branch.name }}</dd>
+    <dt>Supervisor / Erected By</dt><dd>{{ report.supervisor.full_name }} ({{ report.supervisor.employee_id }})</dd>
+    <dt>Customer</dt><dd>{{ report.tower.package.customer }}</dd>
+    <dt>Customer Order No.</dt><dd>{{ report.tower.package.customer_order_no or 'Not provided' }}</dd>
+    <dt>Cooling Tower Series</dt><dd>{{ report.tower.package.cooling_tower_series }}</dd>
+    <dt>Model</dt><dd>{{ report.tower.package.model }}</dd>
+    <dt>Place of Installation</dt><dd>{{ report.tower.package.place_of_installation }}</dd>
+    <dt>Multiple Towers?</dt><dd>{{ 'Yes' if report.tower.package.multiple_towers else 'No' }}</dd>
+    <dt>Tower Suffix</dt><dd>{{ report.tower.tower_suffix or 'None' }}</dd>
+    <dt>No. of Cells (this tower)</dt><dd>{{ report.tower.declared_no_of_cells or 'Not provided' }}</dd>
+    <dt>Cell No.</dt><dd>{{ report.cell_no }}</dd>
+    <dt>Erection Start Date</dt><dd>{{ report.erection_start_date.isoformat() if report.erection_start_date else 'Not provided' }}</dd>
+    <dt>Erection Completion Date</dt><dd>{{ report.erection_completion_date.isoformat() }}</dd>
+    <dt>Last Updated</dt><dd>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+  </dl>
+</section>
+{% endblock %}

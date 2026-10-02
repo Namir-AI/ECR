@@ -3,8 +3,10 @@
 from fastapi import APIRouter, Request, status
 from starlette.responses import RedirectResponse, Response
 
-from app.auth.dependencies import OptionalUser, PasswordReadyUser
+from app.auth.dependencies import DatabaseSession, OptionalUser, PasswordReadyUser
 from app.core.templates import render_template
+from app.ecr.services import list_supervisor_reports
+from app.users.models import UserRole
 
 router = APIRouter(tags=["pages"])
 
@@ -16,8 +18,16 @@ def root(user: OptionalUser) -> RedirectResponse:
 
 
 @router.get("/dashboard", name="dashboard")
-def dashboard(request: Request, user: PasswordReadyUser) -> Response:
-    """Authentication-only placeholder; ECR dashboard begins in Phase 3."""
+def dashboard(request: Request, db: DatabaseSession, user: PasswordReadyUser) -> Response:
+    if user.role is UserRole.SUPERVISOR:
+        return render_template(
+            request,
+            "ecr/supervisor_dashboard.html",
+            {
+                "current_user": user,
+                "reports": list_supervisor_reports(db, user.id),
+            },
+        )
     return render_template(
         request,
         "dashboard.html",

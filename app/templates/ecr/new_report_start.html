@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "components/navigation_icon.html" import navigation_icon %}
+{% block title %}New E&C Report — Paharpur ECR{% endblock %}
+{% block content %}
+<section class="card auth-card">
+  <div class="heading-row"><div><h1>New Erection &amp; Commissioning Report</h1><p class="muted">First identify the ECR Package.</p></div><a href="/dashboard">Back to dashboard</a></div>
+  <form method="post" action="/ecr/reports/new/check">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Cooling Tower Serial No.
+      <input name="cooling_tower_serial_no" value="{{ form.cooling_tower_serial_no or '' }}" maxlength="100" required autofocus>
+    </label>
+    <button type="submit">{{ navigation_icon("reports") }}<span>Check Package</span></button>
+  </form>
+</section>
+{% endblock %}
