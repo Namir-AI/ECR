@@ -1,0 +1,11 @@
+{% for section, fields in page1_sections %}
+<section class="card">
+  <h2>{{ section }}</h2>
+  <dl class="details-grid">
+    {% for name, label, kind, extra in fields %}
+    <dt>{{ label }}</dt><dd>{{ page1_values[name] if page1_values[name] != '' else 'Not entered' }}{% if page1_values[name] != '' and kind in ['number', 'integer'] and extra %} {{ extra }}{% endif %}</dd>
+    {% endfor %}
+    {% if section == 'Fan' and page1_values.blade_serials %}<dt>Blade Sl. Nos.</dt><dd><ol>{% for serial in page1_values.blade_serials %}<li>{{ serial }}</li>{% endfor %}</ol></dd>{% endif %}
+  </dl>
+</section>
+{% endfor %}

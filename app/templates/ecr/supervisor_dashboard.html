@@ -9,7 +9,7 @@
 <section class="card">
   <div class="heading-row"><div><h2>My Previous Reports</h2><p class="muted">Your reports remain visible here even after a future branch transfer.</p></div></div>
   <div class="table-scroll"><table>
-    <thead><tr><th>Cooling Tower Serial No.</th><th>Tower</th><th>Cell</th><th>Customer</th><th>Model</th><th>Historical Branch</th><th>Completion Date</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
+    <thead><tr><th>Cooling Tower Serial No.</th><th>Tower</th><th>Cell</th><th>Customer</th><th>Model</th><th>Branch</th><th>Completion Date</th><th>Status</th><th>Last Updated</th><th></th></tr></thead>
     <tbody>{% for report in reports %}<tr>
       <td>{{ report.tower.package.cooling_tower_serial_no }}</td>
       <td>{{ report.tower.tower_suffix or 'Single tower' }}</td>

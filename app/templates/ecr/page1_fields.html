@@ -1,0 +1,40 @@
+<input type="hidden" name="page1_present" value="1">
+<p class="muted">* Required for the completed ECR. Incomplete Drafts can be saved.</p>
+{% for section, fields in page1_sections %}
+<details class="technical-section" open>
+  <summary>{{ section }}</summary>
+  <div class="form-grid technical-fields">
+    {% for name, label, kind, extra in fields %}
+    <label for="{{ name }}" class="form-field"><span class="field-label">{{ label }}{% if name in page1_required_fields %} *{% endif %}{% if kind in ['number', 'integer'] and extra and extra != label %} <span class="field-unit">({{ extra }})</span>{% endif %}</span>
+      {% if kind == 'select' %}
+      <select id="{{ name }}" name="{{ name }}" class="form-control" data-page1-field>
+        <option value=""{% if not page1_values[name] %} selected{% endif %}>{{ 'Select unit…' if name == 'drive_shaft_oal_unit' else 'Select…' }}</option>
+        {% for option in extra %}<option value="{{ option }}"{% if page1_values[name] == option %} selected{% endif %}>{{ option }}</option>{% endfor %}
+      </select>
+      {% else %}
+      <input id="{{ name }}" name="{{ name }}" class="form-control" data-page1-field
+        type="{{ 'number' if kind in ['number', 'integer'] else 'text' }}"
+        {% if kind == 'number' %}step="any" inputmode="decimal" data-decimal{% elif kind == 'integer' %}step="1" min="1" data-integer{% else %}maxlength="250"{% endif %}
+        {% if name == 'fan_diameter_type' %}placeholder="192IN XX-XX-XX"{% endif %}
+        {% if name in ['motor_hp', 'motor_full_load_current', 'motor_current_drawn'] %}data-nonnegative-decimal min="{{ '0.000000000000000001' if name == 'motor_full_load_current' else '0' }}"{% endif %}
+        value="{{ page1_values[name] }}">
+      {% endif %}
+      {% if name == 'motor_full_load_current' %}<span class="muted">When entered, must be greater than 0 Amps.</span>{% elif name == 'motor_current_drawn' %}<span class="muted">0 Amps is valid; negative values are not allowed.</span>{% endif %}
+    </label>
+    {% endfor %}
+  </div>
+  {% if section == 'Gearboxes' %}<p class="muted">Series and Ratio are text entries pending the owner's final approved lists.</p>{% endif %}
+  {% if section == 'Fan' %}
+  <div class="blade-serial-editor">
+    <h3>Blade Sl. Nos. <span class="muted">(optional)</span></h3>
+    <div data-blade-list>
+      {% for serial in page1_values.blade_serials %}
+      <div class="blade-serial-row"><label>Blade Serial No.<input name="blade_serials" type="text" maxlength="250" value="{{ serial }}"></label><button type="button" class="secondary" data-remove-blade>Remove</button></div>
+      {% endfor %}
+    </div>
+    <button type="button" class="secondary" data-add-blade>+ Add Blade Serial No.</button>
+    <template data-blade-template><div class="blade-serial-row"><label>Blade Serial No.<input name="blade_serials" type="text" maxlength="250" value=""></label><button type="button" class="secondary" data-remove-blade>Remove</button></div></template>
+  </div>
+  {% endif %}
+</details>
+{% endfor %}

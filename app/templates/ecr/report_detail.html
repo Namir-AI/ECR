@@ -2,10 +2,10 @@
 {% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card">
-  <div class="heading-row"><div><p class="eyebrow">READ-ONLY REPORT IDENTITY</p><h1>{{ report.display_identity }}</h1></div><a href="/reports">Back to reports</a></div>
+  <div class="heading-row"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div><a href="/reports">Back to reports</a></div>
   <dl class="details-grid">
     <dt>Status</dt><dd><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></dd>
-    <dt>Historical Branch</dt><dd>{{ report.branch.name }}</dd>
+    <dt>Branch</dt><dd>{{ report.branch.name }}</dd>
     <dt>Supervisor / Erected By</dt><dd>{{ report.supervisor.full_name }} ({{ report.supervisor.employee_id }})</dd>
     <dt>Customer</dt><dd>{{ report.tower.package.customer }}</dd>
     <dt>Customer Order No.</dt><dd>{{ report.tower.package.customer_order_no or 'Not provided' }}</dd>
@@ -21,4 +21,5 @@
     <dt>Last Updated</dt><dd>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</dd>
   </dl>
 </section>
+{% include "ecr/page1_readonly.html" %}
 {% endblock %}

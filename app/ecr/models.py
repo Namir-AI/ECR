@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Numeric,
     String,
     UniqueConstraint,
 )
@@ -186,7 +188,85 @@ class EcrReport(Base):
     tower: Mapped[EcrTower] = relationship(back_populates="reports")
     supervisor: Mapped[User] = relationship(foreign_keys=[supervisor_user_id])
     branch: Mapped[Branch] = relationship(foreign_keys=[branch_id])
+    page1: Mapped[EcrPage1Technical | None] = relationship(
+        back_populates="report", uselist=False
+    )
 
     @property
     def display_identity(self) -> str:
         return f"{self.tower.display_name} / Cell-{self.cell_no}"
+
+
+class EcrPage1Technical(Base):
+    """Nullable scalar capture for partial Page 1 Drafts; no engineering defaults."""
+
+    __tablename__ = "ecr_page1_technical"
+    __table_args__ = (
+        CheckConstraint(
+            "fan_no_of_blades IS NULL OR fan_no_of_blades > 0", name="blades_positive"
+        ),
+        CheckConstraint(
+            "drive_shaft_oal IS NULL OR drive_shaft_oal_unit IS NOT NULL",
+            name="oal_has_unit",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ecr_reports.id", ondelete="RESTRICT"), unique=True
+    )
+    motor_make: Mapped[str | None] = mapped_column(String(250))
+    motor_serial_no: Mapped[str | None] = mapped_column(String(250), index=True)
+    motor_hp: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    motor_frame: Mapped[str | None] = mapped_column(String(250))
+    motor_insulation: Mapped[str | None] = mapped_column(String(250))
+    motor_mounting: Mapped[str | None] = mapped_column(String(20))
+    motor_speed: Mapped[str | None] = mapped_column(String(20))
+    motor_rpm: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    motor_full_load_current: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    motor_current_drawn: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    fan_serial_no: Mapped[str | None] = mapped_column(String(250), index=True)
+    fan_diameter_type: Mapped[str | None] = mapped_column(String(250))
+    fan_hardware: Mapped[str | None] = mapped_column(String(20))
+    fan_no_of_blades: Mapped[int | None] = mapped_column(BigInteger)
+    fan_pitch_angle: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    fan_hub_cover: Mapped[str | None] = mapped_column(String(20))
+    fan_cylinder_height: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    fan_cylinder_material: Mapped[str | None] = mapped_column(String(20))
+    blade_tip_clearance: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    blade_tip_track_variation: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    drive_shaft_series: Mapped[str | None] = mapped_column(String(250))
+    drive_shaft_class: Mapped[str | None] = mapped_column(String(20))
+    drive_shaft_oal: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    drive_shaft_oal_unit: Mapped[str | None] = mapped_column(String(20))
+    drive_shaft_serial_no: Mapped[str | None] = mapped_column(String(250), index=True)
+    # Deliberately strings: final Series/Ratio lookup lists are owner-deferred.
+    gearbox_series: Mapped[str | None] = mapped_column(String(250))
+    gearbox_ratio: Mapped[str | None] = mapped_column(String(250))
+    gearbox_serial_no: Mapped[str | None] = mapped_column(String(250), index=True)
+    gearbox_model_no: Mapped[str | None] = mapped_column(String(250))
+    fill_type: Mapped[str | None] = mapped_column(String(250))
+    fill_material: Mapped[str | None] = mapped_column(String(20))
+    report: Mapped[EcrReport] = relationship(back_populates="page1")
+    blade_serials: Mapped[list[EcrFanBladeSerial]] = relationship(
+        back_populates="technical",
+        order_by="EcrFanBladeSerial.position",
+        cascade="all, delete-orphan",
+    )
+
+
+class EcrFanBladeSerial(Base):
+    """Genuinely repeating optional blade identifiers with stable display order."""
+
+    __tablename__ = "ecr_fan_blade_serials"
+    __table_args__ = (
+        UniqueConstraint("technical_id", "position", name="uq_ecr_blade_position"),
+        CheckConstraint("position > 0", name="position_positive"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    technical_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ecr_page1_technical.id", ondelete="RESTRICT")
+    )
+    position: Mapped[int] = mapped_column(BigInteger)
+    serial_no: Mapped[str] = mapped_column(String(250))
+    technical: Mapped[EcrPage1Technical] = relationship(back_populates="blade_serials")

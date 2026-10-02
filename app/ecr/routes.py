@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -11,8 +11,16 @@ from app.auth.csrf import validate_csrf
 from app.auth.dependencies import DatabaseSession, ManagementAdmin, SupervisorUser
 from app.branches.services import list_branches
 from app.core.templates import render_template
-from app.ecr.schemas import DraftAutosaveInput, DraftCreateInput, SerialLookupInput
 from app.ecr.models import EcrReportStatus
+from app.ecr.page1 import (
+    FINAL_REQUIRED_FIELDS,
+    SECTIONS,
+    Page1DraftInput,
+    page1_form_snapshot,
+    page1_values,
+    save_page1,
+)
+from app.ecr.schemas import DraftAutosaveInput, DraftCreateInput, SerialLookupInput
 from app.ecr.services import (
     DraftNotEditableError,
     EcrIdentityError,
@@ -210,7 +218,9 @@ def edit_draft(
 ) -> Response:
     report = get_supervisor_report(db, report_id, supervisor.id)
     if report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+        )
     if report.status is not EcrReportStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -224,7 +234,14 @@ def edit_draft(
     return render_template(
         request,
         "ecr/draft.html",
-        {"current_user": supervisor, "report": report, "message": message},
+        {
+            "current_user": supervisor,
+            "report": report,
+            "message": message,
+            "page1_sections": SECTIONS,
+            "page1_required_fields": FINAL_REQUIRED_FIELDS,
+            "page1_values": page1_values(report),
+        },
     )
 
 
@@ -235,19 +252,27 @@ def autosave(
     db: DatabaseSession,
     supervisor: SupervisorUser,
     csrf_token: FormValue,
+    technical_form: Annotated[dict | None, Depends(page1_form_snapshot)],
     erection_start_date: Annotated[str, Form()] = "",
     erection_completion_date: Annotated[str, Form()] = "",
 ) -> JSONResponse:
     validate_csrf(request, csrf_token, request.app.state.settings)
-    report = get_supervisor_report(db, report_id, supervisor.id)
+    report = get_supervisor_report(db, report_id, supervisor.id, lock=True)
     if report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+        )
     try:
         data = DraftAutosaveInput(
             erection_start_date=erection_start_date,
             erection_completion_date=erection_completion_date,
         )
+        technical = (
+            Page1DraftInput(**technical_form) if technical_form is not None else None
+        )
         autosave_draft(report, data)
+        if technical is not None:
+            save_page1(db, report, technical)
         db.commit()
     except ValidationError as exc:
         db.rollback()
@@ -275,9 +300,15 @@ def autosave(
             "values": {
                 "erection_start_date": (
                     report.erection_start_date.isoformat()
-                    if report.erection_start_date else None
+                    if report.erection_start_date
+                    else None
                 ),
                 "erection_completion_date": report.erection_completion_date.isoformat(),
+                **(
+                    {"page1": page1_values(report)}
+                    if technical_form is not None
+                    else {}
+                ),
             },
         }
     )
@@ -313,9 +344,16 @@ def admin_report_detail(
 ) -> Response:
     report = get_admin_visible_report(db, report_id, admin)
     if report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+        )
     return render_template(
         request,
         "ecr/report_detail.html",
-        {"current_user": admin, "report": report},
+        {
+            "current_user": admin,
+            "report": report,
+            "page1_sections": SECTIONS,
+            "page1_values": page1_values(report),
+        },
     )

@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card">
   <div class="heading-row"><div><h1>Reports</h1><p class="muted">{% if current_user.role.value == 'BRANCH_ADMIN' %}Historical {{ current_user.branch.name }} reports only{% else %}Reports across all historical branches{% endif %}</p></div></div>
-  {% if current_user.role.value == 'SUPERADMIN' %}<form method="get" action="/reports" class="report-filter"><label>Historical Branch<select name="branch_id"><option value="">All branches</option>{% for branch in branches %}<option value="{{ branch.id }}" {% if selected_branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label><button type="submit" class="secondary">Filter</button></form>{% endif %}
+  {% if current_user.role.value == 'SUPERADMIN' %}<form method="get" action="/reports" class="report-filter"><label>Branch<select name="branch_id"><option value="">All branches</option>{% for branch in branches %}<option value="{{ branch.id }}" {% if selected_branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label><button type="submit" class="secondary">Filter</button></form>{% endif %}
   <div class="table-scroll"><table>
     <thead><tr><th>Cooling Tower Serial No.</th><th>Tower</th><th>Cell</th><th>Customer</th><th>Model</th><th>Supervisor</th><th>Branch</th><th>Completion Date</th><th>Status</th><th>Updated</th><th></th></tr></thead>
     <tbody>{% for report in reports %}<tr>

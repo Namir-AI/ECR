@@ -5,7 +5,13 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.ecr.models import EcrPackage, EcrReport, EcrReportStatus, EcrTower
+from app.ecr.models import (
+    EcrPackage,
+    EcrPage1Technical,
+    EcrReport,
+    EcrReportStatus,
+    EcrTower,
+)
 from app.ecr.schemas import DraftAutosaveInput, DraftCreateInput, normalized_serial_key
 from app.users.models import User, UserRole
 
@@ -34,6 +40,7 @@ def _report_load_options():
         joinedload(EcrReport.tower).joinedload(EcrTower.package),
         joinedload(EcrReport.supervisor),
         joinedload(EcrReport.branch),
+        joinedload(EcrReport.page1).selectinload(EcrPage1Technical.blade_serials),
     )
 
 
@@ -150,8 +157,10 @@ def create_or_resume_draft(
     return DraftCreationResult(report=report, resumed=False)
 
 
-def get_supervisor_report(db: Session, report_id: int, supervisor_id: int) -> EcrReport | None:
-    return db.scalar(
+def get_supervisor_report(
+    db: Session, report_id: int, supervisor_id: int, *, lock: bool = False
+) -> EcrReport | None:
+    statement = (
         select(EcrReport)
         .options(*_report_load_options())
         .where(
@@ -159,6 +168,7 @@ def get_supervisor_report(db: Session, report_id: int, supervisor_id: int) -> Ec
             EcrReport.supervisor_user_id == supervisor_id,
         )
     )
+    return db.scalar(statement.with_for_update() if lock else statement)
 
 
 def list_supervisor_reports(db: Session, supervisor_id: int) -> list[EcrReport]:
@@ -188,7 +198,9 @@ def list_admin_reports(
     )
 
 
-def get_admin_visible_report(db: Session, report_id: int, admin: User) -> EcrReport | None:
+def get_admin_visible_report(
+    db: Session, report_id: int, admin: User
+) -> EcrReport | None:
     statement = (
         select(EcrReport)
         .options(*_report_load_options())
