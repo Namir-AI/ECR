@@ -15,7 +15,7 @@ The default installation uses:
 ├── repository.git/           deployment-only Git mirror
 ├── shared/
 │   ├── .env                  protected production configuration
-│   ├── data/                 persistent/upload-ready data location
+│   ├── data/protected/       private persistent customer-signature storage
 │   ├── logs/                 persistent application-managed logs if introduced
 │   ├── uv-cache/             shared uv package/download cache
 │   └── uv-python/            uv-managed CPython 3.12 runtime
@@ -27,6 +27,12 @@ Root owns deployment code, metadata, the Git mirror, and `.env`. The dedicated
 `ecr` runtime account can read the current release and configuration, but can
 write only under the designated shared runtime directories. The application is
 served by Uvicorn on `127.0.0.1:8000`; Nginx is the only public HTTP server.
+The installer also installs the root-owned `/usr/local/sbin/ecr-update`
+launcher. Normal company operation needs no knowledge of release directories.
+It is atomically installed/refreshed only after the exact deployed release
+passes local and configured HTTPS health checks. Failed target deployments
+leave the known-good launcher unchanged. Successful future updates therefore
+deliver improvements to the launcher automatically.
 
 ## A. AWS EC2 prerequisites
 
@@ -100,9 +106,10 @@ sudo ./install.sh --bootstrap-ref "$ECR_BOOTSTRAP_REF"
 ```
 
 When run as a standalone file, `install.sh` requires the explicit bootstrap
-ref. It downloads both a reference copy of `install.sh` and `common.sh` from
-that same ref, verifies the running installer matches the reference copy, and
-only then loads the helper. It will not silently fall back to `main`. The
+ref. It downloads a reference copy of `install.sh`, `common.sh`, `env_tools.py`
+and the stable launcher from that same ref into a private temporary directory,
+verifies the running installer matches the reference copy, and only then loads
+the helper. It will not silently fall back to `main`. The
 selected bootstrap ref becomes the fixed deployment ref shown by the installer
 and cannot be changed by an interactive answer. This guarantees the installer,
 shared helper, and deployed application all use the same ref. The ref may be
@@ -208,29 +215,109 @@ sudo -u ecr .venv/bin/python -m app.users.reset_admin_password
 
 ## I. Updating
 
-Run from the active checkout, with a branch, tag, or commit:
+Company handover: first install with
+`sudo ./install.sh --bootstrap-ref <release-tag-or-commit>` (see section D),
+then update from any directory with:
 
 ```bash
-cd /opt/ecr/current
-sudo ./install/update.sh main
+sudo ecr-update <release-tag-or-commit>
 ```
 
-For a release tag:
+For example, or to use the configured default ref (`ECR_GIT_REF`):
 
 ```bash
-sudo ./install/update.sh v1.2.0
+sudo ecr-update v1.1.0
+sudo ecr-update
 ```
 
-The updater validates and fetches the ref, creates a database backup, prepares
-a separate frozen `uv.lock` release and virtual environment using the same
-uv-managed CPython 3.12 runtime as installation, checks database connectivity,
-runs Alembic, atomically switches `current`, restarts systemd, and verifies
-local and HTTPS health. It never uses `git reset --hard` and never changes
-`.env` or persistent data.
+Exact commits remain supported. Prefer approved immutable tags/full SHAs.
+The small stable launcher requires root, reads the protected deployment config,
+holds the deployment lock, fetches the configured mirror, and resolves an exact
+SHA. It extracts **that commit's** deployment scripts into a root-private
+temporary directory and executes them, handing off the same lock. It never
+sources the current release's helpers. A bootstrap failure changes neither the
+current release nor the database. Deployment state/history records the exact SHA.
 
-Before migrations, failures leave the old release active. Once migrations have
-started, the tool deliberately does not guess that an Alembic downgrade is
-safe; it reports the backup location for reviewed recovery.
+The target updater creates a mandatory database/files backup, prepares a
+separate `uv.lock` release with `uv sync --frozen --no-dev`, checks database
+connectivity, runs Alembic, atomically switches `current`, restarts systemd,
+and verifies local and configured HTTPS health. uv remains the runtime and
+package manager: CPython 3.12 lives under `shared/uv-python`, and each release
+has its own virtualenv. Interpreter containment is checked against canonical
+paths, including when uv returns a release-venv symlink. No manual production
+Python setup is needed.
+
+The active `current` Git worktree is authoritative, not a potentially stale
+commit in `deployment.env`. Stale metadata produces a warning and is reconciled
+on a successful update. Backup metadata and status output also use the actual
+active worktree commit and warn about stale metadata, retaining the recorded
+ref as a descriptive label. Neither backup nor status modifies deployment state.
+After all health checks pass, the updater records deployment state
+and successful history **before** atomically refreshing the stable launcher.
+A launcher-only failure returns non-zero but explicitly reports the healthy
+active application and recorded target commit; it does not imply database
+recovery or trigger rollback. Repair publication permissions and repeat
+`sudo ecr-update <same-ref>`: the same-commit path verifies health, reconciles
+state/ref, records a `reconcile` history event, refreshes the launcher from the
+exact current release, and reports status, without a backup, migration, restart
+or duplicate release.
+
+Before migrations, failures leave the old release/symlink/database unchanged,
+remove only the failed new Git worktree, and restore the pre-update `.env` if
+configuration preparation had begun. Failed cleanup is a warning, not permission
+to remove other releases or shared data. Once migrations begin there is **no
+automatic Alembic downgrade**: retain the failed release and use the named
+database backup/environment snapshot for reviewed recovery. A post-activation
+health failure also needs operator review; code/schema are not blindly reverted.
+Environment recovery restores exact contents atomically with live permissions
+`root:<service user> 0640`; the retained snapshot stays `root:root 0600`.
+
+### One-time adoption on installations with the old updater
+
+The old `/opt/ecr/current/install/update.sh` cannot install this fix when its
+Python check fails. After the owner publishes an approved commit containing
+this hardening, download its **new launcher** (not the old updater) and install
+only the stable command. For a public repository, as root:
+
+```bash
+sudo -i
+ECR_TOOLING_REF=<full-approved-hardening-commit-sha>
+ECR_BOOTSTRAP_DIR=$(mktemp -d /root/ecr-launcher.XXXXXXXX)
+curl -fsSL --proto '=https' --tlsv1.2 \
+  "https://raw.githubusercontent.com/Namir-AI/ECR/${ECR_TOOLING_REF}/install/ecr-update.sh" \
+  -o "$ECR_BOOTSTRAP_DIR/ecr-update.sh"
+bash "$ECR_BOOTSTRAP_DIR/ecr-update.sh" --install-launcher "$ECR_TOOLING_REF"
+ecr-update "$ECR_TOOLING_REF"
+exit
+```
+
+For private repositories, obtain this same file through the company's trusted
+checkout/read-only Deploy Key process. `--install-launcher` fetches and verifies
+the configured mirror and installs the launcher **from the selected commit**;
+it performs no release activation, application migration, or secret changes.
+This adoption option is only for an absent launcher. It will not replace an
+already-installed command; use a normal healthy update to refresh that command.
+Keep/review the small root-only downloaded bootstrap directory according to IT
+policy. The accepted application SHA `bf29fc7` predates this deployment fix and
+does not contain the new launcher. Future updates need only `sudo ecr-update`.
+
+### Managed production settings
+
+Fresh install creates `shared/data/protected` with service ownership and mode
+`0700` and writes the absolute `STORAGE_ROOT` into production `.env`.
+Updates preserve valid custom absolute roots; a missing/blank setting or the
+old example `var/protected` becomes the persistent shared path automatically.
+Other relative roots, `/`, or release-local storage are rejected for review.
+Existing signature files are never moved/deleted by a configuration upgrade.
+
+New non-secret defaults may be explicitly added to `MANAGED_DEFAULTS` in
+`install/lib/env_tools.py` by release maintainers. Only missing opted-in values
+are copied from the target `.env.example`. Existing custom values, passwords,
+and secrets are never replaced with example values. `STORAGE_ROOT` is the
+explicit production-path exception described above. Settings are validated
+using the target application before migrations/activation, without logging
+secret values. Invalid custom settings require deliberate administrator review,
+not silent overwriting. Updates retain a root-only pre-update env snapshot.
 
 ## J. Backups and retention
 
@@ -243,7 +330,12 @@ sudo ./install/backup.sh
 
 Backups use a consistent transactional `mysqldump`, gzip verification, SHA-256
 metadata, deployed ref/commit metadata, and mode `0600`. If `shared/data/`
-contains persistent files, it is archived alongside the SQL dump.
+exists, it is archived alongside the SQL dump, including when empty.
+The archive includes `data/protected` customer signatures. A valid custom
+`STORAGE_ROOT` outside `shared/data` receives a separate `.storage.tar.gz`
+archive with its own checksum/location metadata. Both file archives undergo
+gzip and tar readability checks. New backup metadata marks a completed backup
+set; nanosecond timestamps avoid overwriting backups taken close together.
 
 Backups are retained indefinitely by default. Optional retention is explicit
 and always preserves the newest five SQL backups:
@@ -264,15 +356,48 @@ cd /opt/ecr/current
 sudo ./install/restore.sh /opt/ecr/backups/ecr-DATABASE-TIMESTAMP-REF.sql.gz
 ```
 
-With no argument, the script lists available SQL backups. It validates the
-gzip/checksum, displays the target database and backup metadata, requires the
-exact confirmation `RESTORE <database>`, and creates another safety backup
-before restoring. It does not automatically change application code or
-downgrade Alembic; match the application release to backup metadata when schema
-compatibility requires it.
+With no argument, the script lists available SQL backups. Recovery is one
+reviewed operation for the database **and its paired persistent files**:
 
-Persistent-file archives are intentionally not overwritten automatically.
-Restore those only after reviewing their archive and destination.
+1. Validate SQL gzip/SHA-256 and paired archive checksums. Parse metadata as
+   data, never as shell code. Reject incomplete sets, unsafe paths, symlinks,
+   hardlinks, devices, duplicate paths and unreadable archives before mutation.
+2. Stage verified SQL and extracted file content privately. Only the regular
+   files/directories in the reviewed archives are accepted; archive ownership
+   and executable modes are not trusted.
+3. Require the existing exact `RESTORE <database>` confirmation.
+4. Stop the application, then create the mandatory safety backup of the
+   current database/files. No current data is replaced unless that succeeds.
+5. Restore SQL and exchange the paired data directories. Previous directories
+   are retained as `.ecr-before-restore.*` for reviewed recovery, not deleted.
+6. Run the DB check, start the service, then check local/configured HTTPS health.
+
+The `.files.tar.gz` restores into the current real `shared/data` directory.
+Custom `.storage.tar.gz` recovery uses the **current configured** canonical
+`STORAGE_ROOT` and requires an exact match with the backed-up canonical root.
+It never extracts to an arbitrary metadata-selected path, application releases,
+or protected deployment directories. Mismatch aborts before SQL restoration.
+Restored content is service-owned; protected files use private permissions.
+Directory exchange requires a normal directory beneath the storage volume;
+a destination that itself is a mount point or contains nested mounts is
+rejected before mutation for mount-aware operator recovery. Mounted parents
+(for example a volume mounted at `shared` with `shared/data` beneath it) are
+supported.
+
+Legacy DB-only sets are clearly identified. Missing archives without paired
+checksums require the additional explicit
+`ACKNOWLEDGE MISSING FILES <database>` before the normal `RESTORE` confirmation;
+those files remain untouched, not falsely reported as restored. A checksum
+that refers to a missing archive is an incomplete set and is rejected. SQL
+checksums/metadata remain mandatory; unverified SQL dumps need operator review.
+
+MySQL DDL recovery cannot be an atomic transaction with filesystem changes.
+If recovery fails after SQL/file mutation starts, the application stays stopped
+and the safety-backup location is reported for operator recovery. There is no
+automatic SQL restore or Alembic downgrade. If the safety backup itself fails,
+no recovery mutation is attempted and the previously active service is restarted.
+Match application code/schema to backup metadata before recovery. Retained
+previous directories are reviewed/removed separately by company policy.
 
 ## L. Application rollback
 
@@ -348,3 +473,10 @@ prints DNS/firewall/Cloudflare troubleshooting guidance.
 These scripts have local static/syntax validation in the repository. Successful
 execution on a particular AWS/company environment must still be verified by its
 administrator; the repository does not claim to provision or test AWS itself.
+
+Deployment regression tests use real temporary Git mirrors/worktrees and
+filesystem archives, with root/service/uv/MySQL operations simulated:
+`python -m pytest tests/test_deployment.py tests/test_deployment_recovery.py`.
+They never change production. Root/service ownership requests are simulated
+where root privileges are unavailable; production permission checks still
+need the company's privileged acceptance test.

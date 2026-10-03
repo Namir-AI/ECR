@@ -146,7 +146,24 @@ load_deployment_config() {
 
 acquire_deployment_lock() {
     local lock_file=${1:-/run/lock/ecr-deployment.lock}
-    exec 9>"$lock_file"
+    # The stable launcher keeps this descriptor open while target tooling runs.
+    # Verify its identity before reusing it; never reopen and deadlock our parent.
+    if [[ ${ECR_DEPLOYMENT_LOCK_HELD:-false} == true && \
+            "$lock_file" == /run/lock/ecr-deployment.lock && \
+            $(readlink -f -- "/proc/$$/fd/9") == "$lock_file" ]]; then
+        flock -n 9 || die "Deployment lock handoff failed."
+        return
+    fi
+    if [[ ! -e "$lock_file" && ! -L "$lock_file" ]]; then
+        # Exclusive creation in /run/lock; never follow a pre-planted symlink.
+        (umask 0077; set -o noclobber; : >"$lock_file") || true
+    fi
+    [[ -f "$lock_file" && ! -L "$lock_file" && $(stat -c %u -- "$lock_file") == 0 ]] || \
+        die "Deployment lock must be a root-owned regular file."
+    local lock_mode
+    lock_mode=$(stat -c %a -- "$lock_file")
+    (( (8#$lock_mode & 0022) == 0 )) || die "Deployment lock is writable by other users."
+    exec 9<"$lock_file"
     flock -n 9 || die "Another ECR deployment operation is already running."
 }
 
@@ -178,6 +195,8 @@ ensure_install_layout() {
     install -d -o "$ECR_SERVICE_USER" -g "$ECR_SERVICE_USER" -m 0750 \
         "$ECR_INSTALL_DIR/shared/data" \
         "$ECR_INSTALL_DIR/shared/logs"
+    install -d -o "$ECR_SERVICE_USER" -g "$ECR_SERVICE_USER" -m 0700 \
+        "$ECR_INSTALL_DIR/shared/data/protected"
     install -d -o root -g root -m 0750 \
         "$ECR_INSTALL_DIR/shared/uv-cache"
     install -d -o root -g "$ECR_SERVICE_USER" -m 0750 \
@@ -189,7 +208,7 @@ ensure_install_layout() {
 ensure_production_python() {
     require_command uv
     local python_install_dir="$ECR_INSTALL_DIR/shared/uv-python"
-    local python_path
+    local python_path canonical_root
 
     install -d -o root -g "$ECR_SERVICE_USER" -m 0750 "$python_install_dir"
     log "Ensuring uv-managed CPython $ECR_PRODUCTION_PYTHON_VERSION is available."
@@ -203,12 +222,15 @@ ensure_production_python() {
         UV_PYTHON_INSTALL_DIR="$python_install_dir" \
         uv python find --no-project --managed-python \
             "$ECR_PRODUCTION_PYTHON_VERSION")
-    [[ -x "$python_path" ]] || die "uv-managed Python is unavailable after installation."
+    canonical_root=$(readlink -f -- "$python_install_dir") || die "Cannot resolve protected Python root."
+    python_path=$(readlink -f -- "$python_path") || die "Cannot resolve uv-managed Python interpreter."
+    [[ -f "$python_path" && -x "$python_path" ]] || die "uv-managed Python is unavailable after installation."
     case "$python_path" in
-        "$python_install_dir"/*) ;;
+        "$canonical_root"/*) ;;
         *) die "uv resolved Python outside the protected production runtime directory." ;;
     esac
-    "$python_path" -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+    "$python_path" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12) or sys.implementation.name != "cpython")' || \
+        die "Production interpreter must be CPython 3.12."
     ECR_PRODUCTION_PYTHON=$python_path
 }
 
@@ -277,14 +299,43 @@ resolve_git_ref() {
     return 1
 }
 
-prepare_release() {
+cleanup_failed_release() {
+    local release_dir=$1 release_root resolved current
+    release_root=$(readlink -f -- "$ECR_INSTALL_DIR/releases") || return 1
+    resolved=$(readlink -f -- "$release_dir") || return 1
+    current=$(current_release_path || true)
+    # Only a direct child of releases, never the active/previous release or a symlink.
+    [[ ! -L "$release_dir" && ${resolved%/*} == "$release_root" && \
+        "$resolved" != "$current" && "$resolved" != "${ECR_PREVIOUS_RELEASE:-}" ]] || {
+        warn "Refusing unsafe failed-release cleanup."
+        return 1
+    }
+    git_as_deployer --git-dir="$ECR_INSTALL_DIR/repository.git" \
+        worktree remove --force -- "$resolved" || {
+        warn "Failed worktree cleanup was unsuccessful; retained $resolved for inspection."
+        return 1
+    }
+}
+
+prepare_release() (
+    # A subshell gives prepare_release its own EXIT cleanup even when called via
+    # command substitution. Explicit errexit avoids Bash's substitution default.
+    set -Eeuo pipefail
+    trap - ERR
     local commit=$1
     local timestamp short_commit release_dir
+    release_dir=""
+    trap 'code=$?; if (( code != 0 )) && [[ -n "$release_dir" ]]; then
+        cleanup_failed_release "$release_dir" || true
+    fi; exit "$code"' EXIT
     {
         timestamp=$(date -u +%Y%m%dT%H%M%SZ)
         short_commit=${commit:0:12}
         release_dir="$ECR_INSTALL_DIR/releases/${timestamp}-${short_commit}"
-        [[ ! -e "$release_dir" ]] || die "Release path already exists: $release_dir"
+        if [[ -e "$release_dir" || -L "$release_dir" ]]; then
+            release_dir=""
+            die "Release path already exists."
+        fi
 
         log "Preparing isolated application release $short_commit."
         git_as_deployer --git-dir="$ECR_INSTALL_DIR/repository.git" \
@@ -304,6 +355,53 @@ prepare_release() {
 
     # stdout is the function's return channel for command substitution.
     printf '%s\n' "$release_dir"
+)
+
+upgrade_production_env() {
+    local release_dir=$1 storage_root helper
+    helper=$(deployment_env_helper "$release_dir")
+    "$release_dir/.venv/bin/python" "$helper" upgrade \
+        "$ECR_INSTALL_DIR/shared/.env" "$release_dir/.env.example" "$ECR_INSTALL_DIR"
+    storage_root=$("$release_dir/.venv/bin/python" "$helper" storage \
+        "$ECR_INSTALL_DIR/shared/.env")
+    # Preserve existing custom directory ownership/permissions as well as its
+    # value. Never chown/chmod an operator-selected existing directory.
+    if [[ ! -d "$storage_root" ]]; then
+        install -d -o "$ECR_SERVICE_USER" -g "$ECR_SERVICE_USER" -m 0700 "$storage_root"
+    fi
+    run_as_service test -w "$storage_root" || die "Service cannot write to protected storage."
+    chown root:"$ECR_SERVICE_USER" "$ECR_INSTALL_DIR/shared/.env"
+    chmod 0640 "$ECR_INSTALL_DIR/shared/.env"
+    (cd "$release_dir" && run_as_service env PYTHONPATH="$release_dir" "$release_dir/.venv/bin/python" \
+        "$helper" validate "$ECR_INSTALL_DIR/shared/.env")
+}
+
+atomic_install_file() (
+    # Same-directory staging keeps replacement atomic, with final permissions
+    # applied before the live pathname becomes visible. Never copy a symlink.
+    local source=$1 target=$2 owner=$3 group=$4 mode=$5 staged=""
+    [[ -f "$source" && ! -L "$source" ]] || die "Expected a regular deployment source file."
+    [[ ! -L "$target" && ( ! -e "$target" || -f "$target" ) ]] || die "Unsafe deployment file destination."
+    staged=$(mktemp "${target%/*}/.ecr-file.XXXXXXXX") || exit "$?"
+    trap 'code=$?; rm -f -- "$staged" || warn "Staged file cleanup failed."; exit "$code"' EXIT
+    install -o "$owner" -g "$group" -m "$mode" -- "$source" "$staged" || exit "$?"
+    mv -Tf -- "$staged" "$target" || exit "$?"
+)
+
+restore_production_env() {
+    atomic_install_file "$1" "$ECR_INSTALL_DIR/shared/.env" root "$ECR_SERVICE_USER" 0640 || return "$?"
+    run_as_service test -r "$ECR_INSTALL_DIR/shared/.env" || {
+        warn "Restored production configuration is not readable by the service account."
+        return 1
+    }
+}
+
+install_update_launcher() {
+    local release_dir=$1
+    local launcher="$release_dir/install/ecr-update.sh"
+    [[ -f "$launcher" && ! -L "$launcher" ]] || \
+        die "Target release lacks stable update launcher."
+    atomic_install_file "$launcher" /usr/local/sbin/ecr-update root root 0755
 }
 
 link_release_env() {
@@ -410,9 +508,21 @@ valid_current_release_path() {
     printf '%s\n' "$release_dir"
 }
 
+deployment_env_helper() {
+    local release_dir=$1
+    if [[ -n ${SCRIPT_DIR:-} && -f "$SCRIPT_DIR/lib/env_tools.py" ]]; then
+        printf '%s\n' "$SCRIPT_DIR/lib/env_tools.py"
+    else
+        # Standalone first-install bootstrap downloads only common.sh; after
+        # checkout its target release provides the complete helper set.
+        printf '%s\n' "$release_dir/install/lib/env_tools.py"
+    fi
+}
+
 read_database_environment_from_release() {
     local release_dir=$1
-    local helper="$release_dir/install/lib/env_tools.py"
+    local helper
+    helper=$(deployment_env_helper "$release_dir")
     local python="$release_dir/.venv/bin/python"
     [[ -x "$python" && -f "$helper" ]] || die "Deployment environment reader is unavailable."
     local -a values=()

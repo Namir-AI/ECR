@@ -12,6 +12,7 @@ acquire_deployment_lock /run/lock/ecr-backup.lock
 require_command mysqldump
 require_command gzip
 require_command sha256sum
+require_command tar
 
 retention_days=""
 if [[ $# -gt 0 ]]; then
@@ -22,9 +23,13 @@ fi
 
 read_database_environment
 umask 0077
-timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+timestamp=$(date -u +%Y%m%dT%H%M%S%NZ)
 load_deployment_state || true
-commit=${ECR_CURRENT_COMMIT:-unknown}
+current_release=$(valid_current_release_path) || die "Current application release is unavailable."
+actual_commit=$(git_as_deployer -C "$current_release" rev-parse HEAD) || die "Cannot verify the active release Git commit."
+if [[ -v ECR_CURRENT_COMMIT && "$ECR_CURRENT_COMMIT" != "$actual_commit" ]]; then
+    warn "Deployment metadata was stale: recorded commit $ECR_CURRENT_COMMIT differs from active worktree $actual_commit. Recording the actual active commit in this backup."
+fi
 ref=${ECR_CURRENT_REF:-unknown}
 safe_ref=${ref//[^A-Za-z0-9._-]/_}
 backup_base="$ECR_INSTALL_DIR/backups/ecr-${ECR_DB_NAME_VALUE}-${timestamp}-${safe_ref}"
@@ -61,20 +66,40 @@ metadata_file="${backup_base}.meta"
     printf 'DATABASE_NAME=%q\n' "$ECR_DB_NAME_VALUE"
     printf 'DATABASE_HOST=%q\n' "$ECR_DB_HOST_VALUE"
     printf 'APPLICATION_REF=%q\n' "$ref"
-    printf 'APPLICATION_COMMIT=%q\n' "$commit"
+    printf 'APPLICATION_COMMIT=%q\n' "$actual_commit"
     printf 'SQL_SHA256=%q\n' "$checksum"
+    printf 'BACKUP_FORMAT=2\n'
 } >"$metadata_file"
 chmod 0600 "$metadata_file"
 
-if [[ -d "$ECR_INSTALL_DIR/shared/data" ]] && \
-        [[ -n $(find "$ECR_INSTALL_DIR/shared/data" -mindepth 1 -print -quit) ]]; then
+if [[ -d "$ECR_INSTALL_DIR/shared/data" ]]; then
     files_backup="${backup_base}.files.tar.gz"
     tar -C "$ECR_INSTALL_DIR/shared" -czf "$files_backup" data
+    gzip -t "$files_backup"
+    tar -tzf "$files_backup" >/dev/null
     chmod 0600 "$files_backup"
     printf 'FILES_SHA256=%q\n' "$(sha256sum "$files_backup" | awk '{print $1}')" \
         >>"$metadata_file"
 fi
 
+# Preserve valid custom signature roots too, without expanding the normal
+# shared/data archive or following a symlink out of that archive unnoticed.
+storage_root=$("$current_release/.venv/bin/python" "$SCRIPT_DIR/lib/env_tools.py" \
+    backup-storage "$ECR_INSTALL_DIR/shared/.env" "$ECR_INSTALL_DIR")
+storage_root=$(readlink -f -- "$storage_root")
+data_root=$(readlink -f -- "$ECR_INSTALL_DIR/shared/data")
+if [[ -d "$storage_root" && "$storage_root" != "$data_root" && \
+        "$storage_root" != "$data_root"/* ]]; then
+    storage_backup="${backup_base}.storage.tar.gz"
+    tar -C "$storage_root" -czf "$storage_backup" .
+    gzip -t "$storage_backup"
+    tar -tzf "$storage_backup" >/dev/null
+    chmod 0600 "$storage_backup"
+    printf 'STORAGE_ROOT=%q\nSTORAGE_SHA256=%q\n' "$storage_root" \
+        "$(sha256sum "$storage_backup" | awk '{print $1}')" >>"$metadata_file"
+fi
+
+printf 'BACKUP_COMPLETE=true\n' >>"$metadata_file"
 if [[ -n "$retention_days" ]]; then
     mapfile -t old_backups < <(
         find "$ECR_INSTALL_DIR/backups" -maxdepth 1 -type f -name 'ecr-*.sql.gz' \
@@ -95,7 +120,8 @@ if [[ -n "$retention_days" ]]; then
             if [[ "$keep" == false ]]; then
                 old_base=${old_backup%.sql.gz}
                 log "Pruning explicitly selected old backup: $(basename "$old_backup")"
-                rm -f -- "$old_backup" "${old_base}.meta" "${old_base}.files.tar.gz"
+                rm -f -- "$old_backup" "${old_base}.meta" "${old_base}.files.tar.gz" \
+                    "${old_base}.storage.tar.gz"
             fi
         done
     fi

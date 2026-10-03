@@ -30,7 +30,7 @@ else
     overall_status=1
 fi
 
-current_release=$(current_release_path 2>/dev/null || true)
+current_release=$(valid_current_release_path 2>/dev/null || true)
 if [[ -n "$current_release" ]] && run_db_check "$current_release" >/dev/null 2>&1; then
     database_status="Connected"
 else
@@ -75,7 +75,18 @@ fi
 
 load_deployment_state || true
 git_ref=${ECR_CURRENT_REF:-unknown}
-commit=${ECR_CURRENT_COMMIT:-unknown}
+commit=unknown
+if [[ -n "$current_release" ]]; then
+    if commit=$(git_as_deployer -C "$current_release" rev-parse HEAD); then
+        if [[ -v ECR_CURRENT_COMMIT && "$ECR_CURRENT_COMMIT" != "$commit" ]]; then
+            warn "Deployment metadata was stale: recorded commit $ECR_CURRENT_COMMIT differs from active worktree $commit. Displaying the actual active commit; use ecr-update to reconcile metadata."
+        fi
+    else
+        commit=unknown
+        overall_status=1
+        warn "Cannot verify the active release Git commit; not displaying deployment metadata as the running commit."
+    fi
+fi
 [[ "$commit" == "unknown" ]] || commit=${commit:0:12}
 
 printf 'Paharpur ECR Status\n'

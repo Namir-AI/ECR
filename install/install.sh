@@ -5,15 +5,30 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 COMMON_FILE="$SCRIPT_DIR/lib/common.sh"
 temporary_common=""
 temporary_installer=""
+temporary_tools=""
 BOOTSTRAP_REF=""
+new_install_release=""
+installation_migration_started=false
 
 cleanup_bootstrap() {
+    local exit_code=$?
+    trap - EXIT ERR
+    set +e
+    if (( exit_code != 0 )) && [[ "$installation_migration_started" == false && \
+            -n "$new_install_release" ]]; then
+        cleanup_failed_release "$new_install_release" || true
+    fi
     if [[ -n "$temporary_common" && -f "$temporary_common" ]]; then
-        rm -f -- "$temporary_common"
+        rm -f -- "$temporary_common" || printf '[ECR] WARNING: Common bootstrap cleanup failed.\n' >&2
     fi
     if [[ -n "$temporary_installer" && -f "$temporary_installer" ]]; then
-        rm -f -- "$temporary_installer"
+        rm -f -- "$temporary_installer" || printf '[ECR] WARNING: Reference installer cleanup failed.\n' >&2
     fi
+    if [[ -n "$temporary_tools" ]]; then
+        # Exact private mktemp bootstrap directory, never an installation path.
+        rm -rf -- "$temporary_tools" || printf '[ECR] WARNING: Installer bootstrap cleanup failed.\n' >&2
+    fi
+    exit "$exit_code"
 }
 trap cleanup_bootstrap EXIT
 
@@ -65,13 +80,18 @@ if [[ ! -r "$COMMON_FILE" ]]; then
         "Standalone installation requires --bootstrap-ref so install.sh and common.sh use the same Git ref."
     command -v cmp >/dev/null 2>&1 || bootstrap_error \
         "The standard cmp utility is required for bootstrap verification."
-    temporary_common=$(mktemp /tmp/ecr-common.XXXXXX)
-    temporary_installer=$(mktemp /tmp/ecr-installer.XXXXXX)
+    temporary_tools=$(mktemp -d /tmp/ecr-installer.XXXXXXXX)
+    mkdir "$temporary_tools/lib"
+    temporary_common="$temporary_tools/lib/common.sh"
+    temporary_installer="$temporary_tools/reference-install.sh"
     bootstrap_base_url="https://raw.githubusercontent.com/Namir-AI/ECR/${BOOTSTRAP_REF}/install"
     download_bootstrap_file "$bootstrap_base_url/install.sh" "$temporary_installer"
     cmp -s -- "$temporary_installer" "${BASH_SOURCE[0]}" || bootstrap_error \
         "The local install.sh does not match the explicitly selected Git ref '$BOOTSTRAP_REF'."
     download_bootstrap_file "$bootstrap_base_url/lib/common.sh" "$temporary_common"
+    download_bootstrap_file "$bootstrap_base_url/lib/env_tools.py" "$temporary_tools/lib/env_tools.py"
+    download_bootstrap_file "$bootstrap_base_url/ecr-update.sh" "$temporary_tools/ecr-update.sh"
+    SCRIPT_DIR=$temporary_tools
     COMMON_FILE=$temporary_common
 fi
 
@@ -251,6 +271,7 @@ SQL
 write_production_env() {
     local release_dir=$1
     local env_file="$ECR_INSTALL_DIR/shared/.env"
+    local storage_root
     umask 0077
     if [[ -e "$env_file" ]]; then
         if [[ "$INSTALL_MODE" == "fresh" ]]; then
@@ -261,12 +282,15 @@ write_production_env() {
         chown root:root "$env_backup"
         chmod 0600 "$env_backup"
     fi
+    storage_root=$("$release_dir/.venv/bin/python" "$release_dir/install/lib/env_tools.py" \
+        backup-storage "$env_file" "$ECR_INSTALL_DIR")
 
     {
         printf '%s\0%s\0' APP_ENV production
         printf '%s\0%s\0' APP_DEBUG false
         printf '%s\0%s\0' APP_HOST 127.0.0.1
         printf '%s\0%s\0' APP_PORT "$ECR_APP_PORT"
+        printf '%s\0%s\0' STORAGE_ROOT "$storage_root"
         printf '%s\0%s\0' SESSION_SECURE_COOKIE "$ECR_HTTPS_ENABLED"
         printf '%s\0%s\0' DB_HOST "$DB_HOST"
         printf '%s\0%s\0' DB_PORT "$DB_PORT"
@@ -700,6 +724,7 @@ else
     deploy_commit=$(resolve_git_ref "$ECR_GIT_REF") || \
         die "Requested Git ref was not found: $ECR_GIT_REF"
     release_dir=$(prepare_release "$deploy_commit")
+    new_install_release=$release_dir
     if [[ "$INSTALL_MODE" == "recover" && \
             "$RECOVER_USE_EXISTING_ENV" == "true" ]]; then
         link_release_env "$release_dir"
@@ -716,11 +741,14 @@ else
     fi
 fi
 
+upgrade_production_env "$release_dir"
+
 if [[ "$ECR_DB_TYPE" == "local" ]]; then
     configure_local_mysql
 fi
 
 run_db_check "$release_dir"
+installation_migration_started=true
 run_migrations "$release_dir"
 
 if [[ "$INSTALL_MODE" != "repair" ]]; then
@@ -753,13 +781,14 @@ else
     final_url="http://${ECR_DOMAIN}"
 fi
 
+if [[ "$ssl_failed" == "true" ]]; then
+    warn "Deployment is running over HTTP, but HTTPS setup failed and requires administrator action."
+    exit 1
+fi
+install_update_launcher "$release_dir"
 deployed_commit=$(git_as_deployer -C "$release_dir" rev-parse HEAD)
 printf '\nECR deployment completed.\n'
 printf 'URL              : %s\n' "$final_url"
 printf 'Git ref          : %s\n' "$ECR_GIT_REF"
 printf 'Installed commit : %s\n' "$deployed_commit"
 printf 'Install directory: %s\n' "$ECR_INSTALL_DIR"
-if [[ "$ssl_failed" == "true" ]]; then
-    warn "Deployment is running over HTTP, but HTTPS setup failed and requires administrator action."
-    exit 1
-fi
