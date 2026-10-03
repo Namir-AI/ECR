@@ -114,8 +114,8 @@ are recorded by the server; neither value is accepted from the browser.
 Draft erection dates autosave after changes and persist across reloads. A
 Supervisor sees only their own reports. Branch Admins can open the read-only
 Reports page for reports historically created in their branch, while the
-Superadmin can view all branches. Page 2/Page 3 technical data, submission,
-approval, attachments, and advanced report search remain later-phase work.
+Superadmin can view all branches. Pages 1–3 extend this same Draft flow;
+submission, approval, attachments and advanced report search remain deferred.
 
 ## Create the initial Superadmin
 
@@ -294,7 +294,7 @@ pytest
 
 Downgrade drops Batch A+B data only. Back up populated data before any deliberate
 downgrade; accepted Page 1, identity, users and branch tables are not modified.
-Page 3, workflow, attachments,
+Workflow, attachments,
 search, PDF, final Gearbox lists and controlled post-submission Current Drawn
 correction remain deferred.
 
@@ -310,7 +310,7 @@ ECR_BROWSER_HEADED=1 PYTHONPATH="$PLAYWRIGHT_SITE" pytest tests/test_page1_brows
 ```
 
 Without that optional tooling, pytest reports browser modules as skipped.
-Page 3, attachments, submission/approval, advanced search and PDF remain deferred.
+Attachments, submission/approval, advanced search and PDF remain deferred.
 
 ## Phase 4B2 — Page 2 Batch C
 
@@ -354,6 +354,77 @@ Downgrade removes Batch C only, including torque rows. Back up populated data
 and obtain explicit approval before any deliberate downgrade. Existing Page 1,
 Page 2 A+B, identity, users and branches are preserved.
 
-Deferred: Page 3, workflow, attachments, advanced search, official PDF, final
+Deferred: workflow, attachments, advanced search, official PDF, final
 Gearbox Series/Ratio lists, audited post-submission Current Drawn correction,
 and audited Superadmin shared-Series correction.
+
+## Phase 4C — Page 3 + optional customer signature
+
+Migration `4c6d2e9a103f` follows accepted `4b2c8e1f903a` and adds only
+`ecr_page3`, a one-to-one report relation. Plain-text Team-Leader Report and
+Customer Comment use nullable MySQL `MEDIUMTEXT`; text preserves paragraphs,
+normalizing CRLF/CR to LF. Each has a 100,000-character technical safety limit.
+The Team-Leader Report is final-required but may remain blank in Draft;
+Customer Comment is permanently optional. Both use existing autosave/Save now,
+including commit confirmation and stale-response protection. Older forms without
+the Page-3 snapshot marker do not erase Page-3 text or signatures.
+
+**Erected / Commissioned by** and **Name (in Block Letters)** are read-only,
+derived from the report's Supervisor, with the latter presented in uppercase.
+No separate editable identity is stored. At future submission, historical display
+identity may need a snapshot; that workflow is not implemented here.
+
+Customer Signature is optional. Draw using finger/stylus/mouse, then explicitly
+choose **Save Signature**. **Save now does not save an unsaved drawing**. The
+responsive pad retains normalized strokes across resizing and exports a
+1800×600 PNG. Clear drawing discards only unsaved strokes; removing a saved
+signature uses confirmation and also clears its timestamp. Replacement is
+supported only for the authenticated owner's Draft. No camera, document/image
+upload, customer-name/designation field or separate digital seal is implemented.
+
+The server independently decodes PNG pixels, rejects white/transparent blank
+drawings, checks dimensions (2048×1024, at most 2 million pixels), strips metadata
+and re-encodes. Technical request limits are 2 MiB PNG and 3 MiB JSON. The DB
+stores only a random private object key and server-generated UTC `signed_at`
+with microseconds. Signature and timestamp must either both exist or both be
+NULL; browser timestamps/filenames/flags are rejected.
+
+### Private storage configuration
+
+Development defaults to ignored `var/protected/signatures`. Only an authorized
+report route can retrieve a signature; there is no public static mount. Files
+use 0600 and the signature directory 0700. Branch Admin access follows the
+report's historical branch, not the Supervisor's current branch. Superadmin
+has read-only global access. All mutations require owner + Draft + CSRF.
+
+For production, **set an absolute persistent `STORAGE_ROOT` in the existing
+private .env**, outside application release directories. With the existing
+installer layout an appropriate path is `/opt/ecr/shared/data/protected`
+(adapt to your installation directory). It must be writable by the ECR service
+account and must not be publicly served. The production signature routes fail
+safely until this is configured. Deployment scripts remain unchanged. Back up
+the protected files **together with the database**; a DB-only restore cannot
+restore signature content. The existing shared-data backup layout can include it.
+
+Storage has a small put/read/delete interface suitable for a future S3 adapter;
+S3 and general attachment workflows are not implemented. DB commit precedes
+old-object cleanup. A crash/ambiguous commit or cleanup failure may leave an
+unreferenced private file. No automatic broad file deletion/garbage collection
+is implemented; any later maintenance must reconcile DB references safely.
+
+Migration round-trip verification is safe **only while Page-3 data is empty**:
+
+```bash
+alembic downgrade 4b2c8e1f903a
+alembic upgrade head
+alembic current
+alembic check
+pytest
+```
+
+Downgrade removes Page-3 data, not existing Page-1/2 reports or private files.
+Back up populated data and obtain approval before a deliberate downgrade.
+Future workflow must lock normal Supervisor signature changes after submission.
+Review/Confirm/Submit, Approval, JCC, Tower Photos, search, PDF, final Gearbox
+lists, controlled Current Drawn correction and audited shared-Series correction
+remain deferred.

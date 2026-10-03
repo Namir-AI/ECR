@@ -1,5 +1,7 @@
 """Supervisor Draft and administrator report-visibility routes."""
 
+import json
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
@@ -8,10 +10,16 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from app.auth.csrf import validate_csrf
-from app.auth.dependencies import DatabaseSession, ManagementAdmin, SupervisorUser
+from app.auth.dependencies import (
+    DatabaseSession,
+    ManagementAdmin,
+    PasswordReadyUser,
+    SupervisorUser,
+)
 from app.branches.services import list_branches
 from app.core.templates import render_template
-from app.ecr import batch_c, page1, page2
+from app.core.time import utc_now
+from app.ecr import batch_c, page1, page2, page3
 from app.ecr.models import EcrReportStatus
 from app.ecr.page1 import (
     FINAL_REQUIRED_FIELDS,
@@ -41,6 +49,7 @@ from app.ecr.services import (
     list_admin_reports,
     update_series,
 )
+from app.storage import get_protected_storage
 from app.users.models import UserRole
 
 router = APIRouter(tags=["ecr"])
@@ -79,6 +88,7 @@ def technical_context(report, *, editable=False):
         "torque_categories": batch_c.CATEGORIES,
         "torque_required_categories": batch_c.FINAL_REQUIRED_CATEGORIES,
         "reading_positions": batch_c.POSITIONS,
+        "page3_values": page3.values(report),
     }
 
 
@@ -343,6 +353,7 @@ def autosave(
     technical_form: Annotated[dict | None, Depends(page1_form_snapshot)],
     page2_form: Annotated[dict | None, Depends(page2.page2_form_snapshot)],
     batch_c_form: Annotated[dict | None, Depends(batch_c.form_snapshot)],
+    page3_form: Annotated[dict | None, Depends(page3.form_snapshot)],
     cooling_tower_series: Annotated[str | None, Depends(series_form_value)],
     erection_start_date: Annotated[str, Form()] = "",
     erection_completion_date: Annotated[str, Form()] = "",
@@ -395,6 +406,8 @@ def autosave(
             page2.save_page2(db, report, batch_ab)
         if batch_c_data is not None:
             batch_c.save(db, report, batch_c_data)
+        if page3_form is not None:
+            page3.save_text(db, report, page3.Page3DraftInput(**page3_form))
         db.commit()
     except ValidationError as exc:
         db.rollback()
@@ -423,6 +436,7 @@ def autosave(
             "message": "Saved",
             "updated_at": report.updated_at.isoformat(),
             "values": {
+                **({"page3": page3.values(report)} if page3_form is not None else {}),
                 **(
                     {"batch_c": batch_c.values(report)}
                     if batch_c_form is not None
@@ -464,6 +478,165 @@ def autosave(
                 ),
             },
         }
+    )
+
+
+def _visible_signature_report(db, report_id, user):
+    report = (
+        get_supervisor_report(db, report_id, user.id)
+        if user.role is UserRole.SUPERVISOR
+        else get_admin_visible_report(db, report_id, user)
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+
+def _editable_signature_report(db, report_id, supervisor):
+    report = get_supervisor_report(db, report_id, supervisor.id, lock=True)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.status is not EcrReportStatus.DRAFT:
+        raise HTTPException(status_code=409, detail="Only Draft reports can be edited.")
+    return report
+
+
+def _signature_state(report):
+    record = report.page3
+    present = bool(record and record.customer_signature_storage_key)
+    return {
+        "present": present,
+        "signed_at": record.customer_signed_at.isoformat() + "Z" if present else None,
+        "url": f"/ecr/reports/{report.id}/signature" if present else None,
+    }
+
+
+@router.get("/ecr/reports/{report_id}/signature-state", name="ecr_signature_state")
+def signature_state(report_id: int, db: DatabaseSession, user: PasswordReadyUser):
+    report = _visible_signature_report(db, report_id, user)
+    return JSONResponse(_signature_state(report), headers={"Cache-Control": "no-store"})
+
+
+@router.get("/ecr/reports/{report_id}/signature", name="ecr_signature_read")
+def signature_read(
+    request: Request, report_id: int, db: DatabaseSession, user: PasswordReadyUser
+):
+    report = _visible_signature_report(db, report_id, user)
+    if not report.page3 or not report.page3.customer_signature_storage_key:
+        raise HTTPException(status_code=404, detail="No customer signature recorded")
+    try:
+        content = get_protected_storage(request).read(
+            report.page3.customer_signature_storage_key
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Signature unavailable") from None
+    except (OSError, ValueError):
+        raise HTTPException(
+            status_code=503, detail="Signature temporarily unavailable"
+        ) from None
+    return Response(
+        content,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": 'inline; filename="customer-signature.png"',
+        },
+    )
+
+
+def _remove_old_signature(store, key):
+    if key:
+        try:
+            store.delete(key)
+        except (OSError, ValueError):
+            # DB reference was already revoked. Keep inaccessible data rather than
+            # falsely report a failed save or risk destroying the new signature.
+            logging.getLogger(__name__).warning("Private signature cleanup deferred")
+
+
+@router.post("/ecr/reports/{report_id}/signature", name="ecr_signature_save")
+async def signature_save(
+    request: Request, report_id: int, db: DatabaseSession, supervisor: SupervisorUser
+):
+    validate_csrf(
+        request, request.headers.get("X-CSRF-Token", ""), request.app.state.settings
+    )
+    report = _editable_signature_report(db, report_id, supervisor)
+    if (
+        request.headers.get("content-type", "").split(";")[0].strip()
+        != "application/json"
+    ):
+        raise HTTPException(
+            status_code=415,
+            detail="Use the signature pad; file uploads are not supported.",
+        )
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > page3.JSON_LIMIT:
+            raise HTTPException(
+                status_code=413, detail="Signature drawing is too large."
+            )
+    try:
+        data = page3.SignatureInput.model_validate(json.loads(body))
+        content = page3.validate_signature(data.signature_png)
+    except (ValueError, UnicodeError, TypeError) as exc:
+        message = (
+            _validation_message(exc) if isinstance(exc, ValidationError) else str(exc)
+        )
+        return JSONResponse({"ok": False, "message": message}, status_code=422)
+    old_key = report.page3.customer_signature_storage_key if report.page3 else None
+    try:
+        store = get_protected_storage(request)
+        new_key = store.put(content)
+        record = page3.ensure_page3(db, report)
+        record.customer_signature_storage_key = new_key
+        record.customer_signed_at = utc_now()
+        report.updated_at = utc_now()
+        db.commit()
+    except (OSError, SQLAlchemyError):
+        db.rollback()
+        # An interrupted commit can be ambiguous; never delete the newly written
+        # object here. It may be referenced by a committed row. Safe orphans can
+        # be reconciled later; existing signed data is never destroyed on failure.
+        return JSONResponse(
+            {"ok": False, "message": "Unable to save signature. Please retry."},
+            status_code=503,
+        )
+    _remove_old_signature(store, old_key)
+    return JSONResponse(
+        {"ok": True, "signature": _signature_state(report)},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.delete("/ecr/reports/{report_id}/signature", name="ecr_signature_clear")
+def signature_clear(
+    request: Request, report_id: int, db: DatabaseSession, supervisor: SupervisorUser
+):
+    validate_csrf(
+        request, request.headers.get("X-CSRF-Token", ""), request.app.state.settings
+    )
+    report = _editable_signature_report(db, report_id, supervisor)
+    old_key = report.page3.customer_signature_storage_key if report.page3 else None
+    try:
+        store = get_protected_storage(request)
+        if report.page3:
+            report.page3.customer_signature_storage_key = None
+            report.page3.customer_signed_at = None
+            report.updated_at = utc_now()
+        db.commit()
+    except (OSError, SQLAlchemyError):
+        db.rollback()
+        return JSONResponse(
+            {"ok": False, "message": "Unable to clear signature. Please retry."},
+            status_code=503,
+        )
+    _remove_old_signature(store, old_key)
+    return JSONResponse(
+        {"ok": True, "signature": _signature_state(report)},
+        headers={"Cache-Control": "no-store"},
     )
 
 

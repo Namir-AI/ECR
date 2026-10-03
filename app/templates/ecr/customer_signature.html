@@ -1,0 +1,22 @@
+{% set signed = report.page3 and report.page3.customer_signature_storage_key %}
+<section class="technical-section signature-card" data-signature-card data-signature-url="/ecr/reports/{{ report.id }}/signature" data-signature-state-url="/ecr/reports/{{ report.id }}/signature-state" data-signature-present="{{ 'true' if signed else 'false' }}" aria-labelledby="signature-heading">
+  <h2 id="signature-heading">Customer Signature <span class="muted">(optional)</span></h2>
+  <p class="muted">Draw with a finger, stylus or mouse, then choose Save Signature. Report Save now does not save a drawing.</p>
+  <div data-saved-signature{% if not signed %} hidden{% endif %}>
+    <img class="customer-signature-image" data-signature-image alt="Saved customer signature"{% if signed %} src="/ecr/reports/{{ report.id }}/signature?at={{ report.page3.customer_signed_at.isoformat() }}"{% endif %}>
+    <p data-signed-at>{% if signed %}Signed on: {{ report.page3.customer_signed_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC{% endif %}</p>
+  </div>
+  <p data-no-signature{% if signed %} hidden{% endif %}>No customer signature recorded.</p>
+  <canvas class="signature-pad" data-signature-pad aria-label="Optional customer signature drawing area">Customer signature can be drawn using a pointer; it is optional.</canvas>
+  <div class="signature-actions">
+    <button class="secondary" type="button" data-signature-clear-drawing>Clear Signature</button>
+    <button type="button" data-signature-save>Save Signature</button>
+    <button class="danger" type="button" data-signature-remove{% if not signed %} hidden{% endif %}>Remove saved signature</button>
+  </div>
+  <p class="signature-status" data-signature-status role="status" aria-live="polite">{% if signed %}Signature saved{% else %}Signature is optional{% endif %}</p>
+  <dialog class="confirmation-dialog" data-signature-remove-dialog aria-labelledby="remove-signature-title" aria-describedby="remove-signature-message">
+    <h2 id="remove-signature-title">Remove customer signature?</h2>
+    <p id="remove-signature-message">This removes the saved customer signature and its signed date/time. Other report data will be kept.</p>
+    <div class="confirmation-actions"><button class="secondary" type="button" data-signature-remove-cancel autofocus>Cancel</button><button class="danger" type="button" data-signature-remove-confirm>Remove signature</button></div>
+  </dialog>
+</section>

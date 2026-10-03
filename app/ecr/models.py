@@ -18,8 +18,10 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.mysql import DATETIME, MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.time import utc_now
@@ -194,6 +196,9 @@ class EcrReport(Base):
     page2: Mapped[EcrPage2Technical | None] = relationship(
         back_populates="report", uselist=False
     )
+    page3: Mapped[EcrPage3 | None] = relationship(
+        back_populates="report", uselist=False
+    )
     fastener_rows: Mapped[list[EcrFastenerTorqueRow]] = relationship(
         back_populates="report",
         cascade="all, delete-orphan",
@@ -203,6 +208,38 @@ class EcrReport(Base):
     @property
     def display_identity(self) -> str:
         return f"{self.tower.display_name} / Cell-{self.cell_no}"
+
+
+class EcrPage3(Base):
+    """Completion text and private signature reference, nullable for Drafts."""
+
+    __tablename__ = "ecr_page3"
+    __table_args__ = (
+        CheckConstraint(
+            "(customer_signature_storage_key IS NULL AND customer_signed_at IS NULL) OR "
+            "(customer_signature_storage_key IS NOT NULL AND customer_signed_at IS NOT NULL)",
+            name="signature_timestamp_consistent",
+        ),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ecr_reports.id", ondelete="RESTRICT"), unique=True
+    )
+    team_leader_report: Mapped[str | None] = mapped_column(
+        Text().with_variant(MEDIUMTEXT(), "mysql")
+    )
+    customer_comment: Mapped[str | None] = mapped_column(
+        Text().with_variant(MEDIUMTEXT(), "mysql")
+    )
+    customer_signature_storage_key: Mapped[str | None] = mapped_column(String(64))
+    customer_signed_at: Mapped[datetime | None] = mapped_column(
+        DateTime().with_variant(DATETIME(fsp=6), "mysql")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now, onupdate=utc_now
+    )
+    report: Mapped[EcrReport] = relationship(back_populates="page3")
 
 
 class EcrPage1Technical(Base):

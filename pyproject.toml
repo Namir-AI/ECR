@@ -16,6 +16,7 @@ dependencies = [
     "jinja2>=3.1,<4",
     "pydantic-settings>=2.10,<3",
     "pymysql[rsa]>=1.1,<2",
+    "pillow>=12,<13",
     "python-dotenv>=1.1,<2",
     "python-multipart>=0.0.20,<1",
     "sqlalchemy>=2.0,<3",

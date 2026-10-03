@@ -47,11 +47,11 @@ const initializeDraftAutosave = () => {
       erection_completion_date: form.elements.namedItem("erection_completion_date").value,
     };
     if (seriesSelect) values.cooling_tower_series = seriesSelect.value;
-    ["page1", "page2", "batch_c"].forEach((page) => {
+    ["page1", "page2", "batch_c", "page3"].forEach((page) => {
       if (!form.elements.namedItem(`${page}_present`)) return;
       values[page] = {};
       form.querySelectorAll(`[data-${page}-field]:not(:disabled)`).forEach((field) => {
-        const value = field.value.trim();
+        const value = page === "page3" ? (field.value.trim() ? field.value : "") : field.value.trim();
         values[page][field.name] = field.hasAttribute("data-decimal") || field.hasAttribute("data-integer") ? decimalKey(value) : value;
       });
     });
@@ -75,7 +75,7 @@ const initializeDraftAutosave = () => {
     left.erection_start_date === right.erection_start_date &&
     left.erection_completion_date === right.erection_completion_date &&
     (!Object.hasOwn(right, "cooling_tower_series") || left.cooling_tower_series === right.cooling_tower_series) &&
-    ["page1", "page2", "batch_c"].every((page) => !right[page] || (left[page] && Object.keys(right[page]).every((name) =>
+    ["page1", "page2", "batch_c", "page3"].every((page) => !right[page] || (left[page] && Object.keys(right[page]).every((name) =>
       JSON.stringify(left[page][name]) === JSON.stringify(right[page][name])
     )))
   );
@@ -238,7 +238,7 @@ const initializeDraftAutosave = () => {
   // Delegation includes newly added blade rows in the same save controller.
   ["input", "change"].forEach((type) => form.addEventListener(type, (event) => {
     if (event.target === seriesSelect) updateSections();
-    if (event.target.matches('input:not([type="hidden"]), select')) scheduleSave();
+    if (event.target.matches('input:not([type="hidden"]), select, textarea')) scheduleSave();
   }));
   form.addEventListener("click", (event) => {
     const addTorque = event.target.closest("[data-add-torque]");

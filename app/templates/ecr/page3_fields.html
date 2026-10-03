@@ -1,0 +1,12 @@
+<h2>Page 3 — Completion Details</h2>
+<input type="hidden" name="page3_present" value="1">
+<section class="technical-section completion-details" aria-label="Completion Details">
+  <label for="team_leader_report">Detailed Report by the Erection Team-Leader *</label>
+  <textarea id="team_leader_report" name="team_leader_report" rows="9" maxlength="100000" data-page3-field>
+{{ page3_values.team_leader_report }}</textarea>
+  <p class="muted">Required for the completed ECR. Incomplete Drafts can be saved.</p>
+  {% include "components/supervisor_identity.html" %}
+  <label for="customer_comment">Customer's Comment <span class="muted">(optional)</span></label>
+  <textarea id="customer_comment" name="customer_comment" rows="5" maxlength="100000" data-page3-field>
+{{ page3_values.customer_comment }}</textarea>
+</section>

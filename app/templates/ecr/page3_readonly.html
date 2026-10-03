@@ -1,0 +1,12 @@
+<section class="card completion-details" aria-labelledby="completion-title">
+  <h2 id="completion-title">Page 3 — Completion Details</h2>
+  <h3>Detailed Report by the Erection Team-Leader</h3>
+  <div class="plain-report-text">{{ page3_values.team_leader_report or 'Not entered' }}</div>
+  {% include "components/supervisor_identity.html" %}
+  {% if page3_values.customer_comment %}<h3>Customer's Comment</h3><div class="plain-report-text">{{ page3_values.customer_comment }}</div>{% endif %}
+  <h3>Customer Signature <span class="muted">(optional)</span></h3>
+  {% if report.page3 and report.page3.customer_signature_storage_key %}
+  <img class="customer-signature-image" alt="Saved customer signature" src="/ecr/reports/{{ report.id }}/signature?at={{ report.page3.customer_signed_at.isoformat() }}">
+  <p>Signed on: {{ report.page3.customer_signed_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</p>
+  {% else %}<p class="muted">No customer signature recorded.</p>{% endif %}
+</section>

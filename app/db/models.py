@@ -8,6 +8,7 @@ from app.ecr.models import (
     EcrPackage,
     EcrPage1Technical,
     EcrPage2Technical,
+    EcrPage3,
     EcrReport,
     EcrTower,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "EcrPackage",
     "EcrPage1Technical",
     "EcrPage2Technical",
+    "EcrPage3",
     "EcrReport",
     "EcrTower",
     "PasswordResetRequest",

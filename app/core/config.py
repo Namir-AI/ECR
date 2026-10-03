@@ -1,6 +1,7 @@
 """Environment-based application configuration."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
@@ -23,6 +24,8 @@ class AppSettings(BaseSettings):
     app_debug: bool = False
     app_host: str = "127.0.0.1"
     app_port: int = Field(default=8000, ge=1, le=65535)
+    # Production must select an absolute persistent directory outside releases.
+    storage_root: Path = Path("var/protected")
     session_cookie_name: str = "ecr_session"
     session_ttl_days: int = Field(default=30, ge=1, le=365)
     session_secure_cookie: bool = False

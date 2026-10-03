@@ -43,6 +43,7 @@ def _report_load_options():
         joinedload(EcrReport.branch),
         joinedload(EcrReport.page1).selectinload(EcrPage1Technical.blade_serials),
         joinedload(EcrReport.page2),
+        joinedload(EcrReport.page3),
         selectinload(EcrReport.fastener_rows),
     )
 
