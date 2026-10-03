@@ -194,6 +194,11 @@ class EcrReport(Base):
     page2: Mapped[EcrPage2Technical | None] = relationship(
         back_populates="report", uselist=False
     )
+    fastener_rows: Mapped[list[EcrFastenerTorqueRow]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="(EcrFastenerTorqueRow.category, EcrFastenerTorqueRow.sequence_no)",
+    )
 
     @property
     def display_identity(self) -> str:
@@ -276,7 +281,7 @@ class EcrFanBladeSerial(Base):
 
 
 class EcrPage2Technical(Base):
-    """Page 2 Batch A+B only; nullable Draft capture without defaults."""
+    """Page 2 nullable Draft capture without engineering defaults."""
 
     __tablename__ = "ecr_page2_technical"
     __table_args__ = (
@@ -286,6 +291,22 @@ class EcrPage2Technical(Base):
         CheckConstraint("fc_valve_count > 0", name="valve_count_positive"),
         CheckConstraint("nozzle_count_per_cell > 0", name="nozzle_count_positive"),
         CheckConstraint("belts_used_count > 0", name="belt_count_positive"),
+        *[
+            CheckConstraint(f"{name} BETWEEN -1 AND 1", name=f"{name}_range")
+            for name in (
+                "radial_tir",
+                "axial_tir",
+                "de_top",
+                "de_right",
+                "de_bottom",
+                "de_left",
+                "nde_top",
+                "nde_right",
+                "nde_bottom",
+                "nde_left",
+            )
+        ],
+        CheckConstraint("de_nde_unit IN ('inches', 'mm')", name="de_nde_unit_choice"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -311,4 +332,42 @@ class EcrPage2Technical(Base):
     oil_level_checked: Mapped[str | None] = mapped_column(String(20))
     oil_seal_leakage: Mapped[str | None] = mapped_column(String(20))
     general_tower_hardware: Mapped[str | None] = mapped_column(String(20))
+    radial_tir: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    axial_tir: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    de_nde_unit: Mapped[str | None] = mapped_column(String(10))
+    de_top: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    de_right: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    de_bottom: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    de_left: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    nde_top: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    nde_right: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    nde_bottom: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    nde_left: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    vibration_limit_switch: Mapped[bool | None] = mapped_column(Boolean)
+    oil_level_switch: Mapped[bool | None] = mapped_column(Boolean)
     report: Mapped[EcrReport] = relationship(back_populates="page2")
+
+
+class EcrFastenerTorqueRow(Base):
+    __tablename__ = "ecr_fastener_torque_rows"
+    __table_args__ = (
+        UniqueConstraint(
+            "report_id", "category", "sequence_no", name="uq_ecr_torque_order"
+        ),
+        CheckConstraint(
+            "category IN ('FAN_HARDWARE', 'TOWER', 'MECH_HOLD_DOWN')",
+            name="category_choice",
+        ),
+        CheckConstraint("sequence_no > 0", name="sequence_positive"),
+        CheckConstraint("torque_unit IN ('ft-lbs', 'Nm')", name="torque_unit_choice"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    report_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("ecr_reports.id", ondelete="RESTRICT")
+    )
+    category: Mapped[str] = mapped_column(String(20))
+    sequence_no: Mapped[int] = mapped_column(BigInteger)
+    diameter: Mapped[str | None] = mapped_column(String(250))
+    torque: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    torque_unit: Mapped[str | None] = mapped_column(String(10))
+    report: Mapped[EcrReport] = relationship(back_populates="fastener_rows")

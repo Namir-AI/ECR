@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.ecr.models import (
     EcrPackage,
@@ -43,6 +43,7 @@ def _report_load_options():
         joinedload(EcrReport.branch),
         joinedload(EcrReport.page1).selectinload(EcrPage1Technical.blade_serials),
         joinedload(EcrReport.page2),
+        selectinload(EcrReport.fastener_rows),
     )
 
 

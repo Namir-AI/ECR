@@ -11,7 +11,7 @@ from app.auth.csrf import validate_csrf
 from app.auth.dependencies import DatabaseSession, ManagementAdmin, SupervisorUser
 from app.branches.services import list_branches
 from app.core.templates import render_template
-from app.ecr import page1, page2
+from app.ecr import batch_c, page1, page2
 from app.ecr.models import EcrReportStatus
 from app.ecr.page1 import (
     FINAL_REQUIRED_FIELDS,
@@ -75,6 +75,10 @@ def technical_context(report, *, editable=False):
             if field.json_schema_extra["final_required"]
         },
         "page2_values": page2.page2_values(report),
+        "batch_c_values": batch_c.values(report),
+        "torque_categories": batch_c.CATEGORIES,
+        "torque_required_categories": batch_c.FINAL_REQUIRED_CATEGORIES,
+        "reading_positions": batch_c.POSITIONS,
     }
 
 
@@ -338,6 +342,7 @@ def autosave(
     csrf_token: FormValue,
     technical_form: Annotated[dict | None, Depends(page1_form_snapshot)],
     page2_form: Annotated[dict | None, Depends(page2.page2_form_snapshot)],
+    batch_c_form: Annotated[dict | None, Depends(batch_c.form_snapshot)],
     cooling_tower_series: Annotated[str | None, Depends(series_form_value)],
     erection_start_date: Annotated[str, Form()] = "",
     erection_completion_date: Annotated[str, Form()] = "",
@@ -379,10 +384,17 @@ def autosave(
             if page2_form is not None
             else None
         )
+        batch_c_data = (
+            batch_c.BatchCDraftInput(**batch_c_form)
+            if batch_c_form is not None
+            else None
+        )
         if technical is not None:
             save_page1(db, report, technical)
         if batch_ab is not None:
             page2.save_page2(db, report, batch_ab)
+        if batch_c_data is not None:
+            batch_c.save(db, report, batch_c_data)
         db.commit()
     except ValidationError as exc:
         db.rollback()
@@ -411,6 +423,11 @@ def autosave(
             "message": "Saved",
             "updated_at": report.updated_at.isoformat(),
             "values": {
+                **(
+                    {"batch_c": batch_c.values(report)}
+                    if batch_c_form is not None
+                    else {}
+                ),
                 "erection_start_date": (
                     report.erection_start_date.isoformat()
                     if report.erection_start_date

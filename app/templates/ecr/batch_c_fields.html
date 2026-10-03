@@ -1,0 +1,53 @@
+{% from "components/reading_diagrams.html" import reading_diagrams %}
+{% macro torque_row(category, row={}) %}
+<div class="torque-row" data-torque-row data-category="{{ category }}">
+  <label class="form-field"><span class="field-label">Diameter</span><input class="form-control" type="text" maxlength="250" name="torque_{{ category }}_diameter" data-torque-field="diameter" value="{{ row.get('diameter', '') }}"></label>
+  <label class="form-field"><span class="field-label">Torque</span><input class="form-control" type="text" inputmode="decimal" data-decimal name="torque_{{ category }}_torque" data-torque-field="torque" value="{{ row.get('torque', '') }}"></label>
+  <label class="form-field"><span class="field-label">Torque Unit</span><select class="form-control" name="torque_{{ category }}_torque_unit" data-torque-field="torque_unit"><option value="">Select…</option>{% for unit in ['ft-lbs', 'Nm'] %}<option value="{{ unit }}"{% if row.get('torque_unit') == unit %} selected{% endif %}>{{ unit }}</option>{% endfor %}</select></label>
+  <button type="button" class="secondary" data-remove-torque aria-label="Remove {{ category | replace('_', ' ') | lower }} row">Remove</button>
+</div>
+{% endmacro %}
+<input type="hidden" name="batch_c_present" value="1">
+<details class="technical-section" open>
+  <summary>Fastener Torque Details</summary>
+  <div class="technical-fields">
+    <p class="muted">For the completed ECR, include at least one Fan Hardware Fastener row with Diameter, Torque and Torque Unit. Partial Draft rows can be saved.</p>
+    {% for category, label in torque_categories %}
+    <section class="torque-category" data-torque-category="{{ category }}" aria-label="{{ label }}">
+      <h3>{{ label }}{% if category in torque_required_categories %} *{% else %} <span class="muted">(optional)</span>{% endif %}</h3>
+      <div data-torque-list>
+        {% set rows = batch_c_values.fastener_rows | selectattr('category', 'equalto', category) | list %}
+        {% for row in rows %}{{ torque_row(category, row) }}{% endfor %}
+        {% if not rows and category == 'FAN_HARDWARE' %}{{ torque_row(category) }}{% endif %}
+      </div>
+      <button type="button" class="secondary" data-add-torque>+ Add {{ 'Row' if category == 'FAN_HARDWARE' else label }}</button>
+      <template data-torque-template>{{ torque_row(category) }}</template>
+    </section>
+    {% endfor %}
+  </div>
+</details>
+<details class="technical-section" open>
+  <summary>Mechanical Equipment Alignment</summary>
+  <div class="form-grid technical-fields">
+    {% for name, label in [('radial_tir', 'Radial T.I.R'), ('axial_tir', 'Axial T.I.R')] %}
+    <label class="form-field" for="{{ name }}"><span class="field-label">{{ label }} <span class="muted">(optional)</span></span><input class="form-control" id="{{ name }}" name="{{ name }}" type="text" inputmode="decimal" data-batch_c-field data-decimal value="{{ batch_c_values[name] }}" aria-describedby="tir-help"></label>
+    {% endfor %}
+    <p class="muted" id="tir-help">Enter a signed decimal from −1 to +1, with up to 3 decimal places.</p>
+  </div>
+</details>
+<details class="technical-section reading-section" open>
+  <summary>DE / NDE</summary>
+  <div class="technical-fields">
+    <label class="form-field" for="de_nde_unit"><span class="field-label">DE / NDE Unit *</span><select class="form-control" id="de_nde_unit" name="de_nde_unit" data-batch_c-field><option value="">Select…</option>{% for unit in ['inches', 'mm'] %}<option value="{{ unit }}"{% if batch_c_values.de_nde_unit == unit %} selected{% endif %}>{{ unit }}</option>{% endfor %}</select></label>
+    <p class="muted">One unit applies to all eight readings. Enter −1.00 to +1.00; adjustment buttons change the reading by 0.01.</p>
+    {{ reading_diagrams(batch_c_values, reading_positions, editable=true) }}
+  </div>
+</details>
+<details class="technical-section" open>
+  <summary>Other Optionals</summary>
+  <div class="form-grid technical-fields">
+    {% for name, label in [('vibration_limit_switch', 'Vibration Limit Switch'), ('oil_level_switch', 'Oil Level Switch')] %}
+    <label class="form-field" for="{{ name }}"><span class="field-label">{{ label }} *</span><select class="form-control" id="{{ name }}" name="{{ name }}" data-batch_c-field><option value="">Select…</option>{% for value in ['Yes', 'No'] %}<option value="{{ value }}"{% if batch_c_values[name] == value %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+    {% endfor %}
+  </div>
+</details>

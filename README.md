@@ -294,7 +294,7 @@ pytest
 
 Downgrade drops Batch A+B data only. Back up populated data before any deliberate
 downgrade; accepted Page 1, identity, users and branch tables are not modified.
-Batch C (torque, alignment/TIR, DE/NDE, switches), Page 3, workflow, attachments,
+Page 3, workflow, attachments,
 search, PDF, final Gearbox lists and controlled post-submission Current Drawn
 correction remain deferred.
 
@@ -310,5 +310,50 @@ ECR_BROWSER_HEADED=1 PYTHONPATH="$PLAYWRIGHT_SITE" pytest tests/test_page1_brows
 ```
 
 Without that optional tooling, pytest reports browser modules as skipped.
-Page 2/Page 3, attachments, submission/approval, advanced search and PDF remain
-outside Phase 4A.
+Page 3, attachments, submission/approval, advanced search and PDF remain deferred.
+
+## Phase 4B2 — Page 2 Batch C
+
+Migration `4b2c8e1f903a` follows `4b1a9c2d7e60`. It extends
+`ecr_page2_technical` with nullable alignment, DE/NDE and switch fields and adds
+`ecr_fastener_torque_rows`. Earlier migrations and data are unchanged.
+
+Fastener rows are ordered within Fan Hardware, Tower and Mechanical Equipment
+Hold Down categories. Add/remove rows without a four-row limit. Only Fan Hardware
+requires a completed row for the future final ECR; Draft rows may be partial.
+Diameter remains text; torque uses `DECIMAL(38,18)` (20 whole/18 fractional
+digits), with no engineering sign or acceptance limit. Unit choices are exactly
+`ft-lbs` / `Nm`. Entirely blank rows are not persisted; repeated snapshots do not
+append duplicates. Oversized decimals are rejected, not silently rounded.
+
+Radial/Axial T.I.R are optional, manually typed signed decimals without spinners
+or displayed units. Range is −1 through +1, at most three fractional places,
+stored as `DECIMAL(4,3)`. DE and NDE each have four graphical readings in that
+same range, in hundredths (`DECIMAL(3,2)`), with 0.01 adjustment controls. One
+shared `inches` / `mm` selector applies to all eight. Zero is meaningful data;
+all readings and selectors initially remain blank. No engineering judgment is
+made. Vibration Limit Switch and Oil Level Switch require explicit Yes/No for
+the future completed report, stored as nullable booleans during Draft.
+
+All capture uses the existing serialized Draft autosave/Save now transaction,
+CSRF and ownership rules. Branch Admin and Superadmin report access remains
+read-only. Separate snapshot markers preserve Batch C if an older open A+B form
+saves. Final-required metadata does not enforce completeness during Draft.
+
+To verify a migration round-trip **only before Batch C data has been entered**:
+
+```bash
+alembic upgrade head
+alembic downgrade 4b1a9c2d7e60
+alembic upgrade head
+alembic check
+pytest
+```
+
+Downgrade removes Batch C only, including torque rows. Back up populated data
+and obtain explicit approval before any deliberate downgrade. Existing Page 1,
+Page 2 A+B, identity, users and branches are preserved.
+
+Deferred: Page 3, workflow, attachments, advanced search, official PDF, final
+Gearbox Series/Ratio lists, audited post-submission Current Drawn correction,
+and audited Superadmin shared-Series correction.

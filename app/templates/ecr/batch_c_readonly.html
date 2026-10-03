@@ -1,0 +1,12 @@
+{% from "components/reading_diagrams.html" import reading_diagrams %}
+{% for category, label in torque_categories %}
+{% set rows = batch_c_values.fastener_rows | selectattr('category', 'equalto', category) | list %}
+{% if rows %}
+<section class="card"><h2>{{ label }}</h2><div class="table-scroll"><table><thead><tr><th>Diameter</th><th>Torque</th><th>Torque Unit</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.diameter or '—' }}</td><td>{{ row.torque if row.torque != '' else '—' }}</td><td>{{ row.torque_unit or '—' }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endif %}
+{% endfor %}
+{% if batch_c_values.radial_tir != '' or batch_c_values.axial_tir != '' %}
+<section class="card"><h2>Mechanical Equipment Alignment</h2><dl class="details-grid">{% for name, label in [('radial_tir', 'Radial T.I.R'), ('axial_tir', 'Axial T.I.R')] %}{% if batch_c_values[name] != '' %}<dt>{{ label }}</dt><dd>{{ batch_c_values[name] }}</dd>{% endif %}{% endfor %}</dl></section>
+{% endif %}
+<section class="card"><h2>DE / NDE</h2><p>DE / NDE Unit: {{ batch_c_values.de_nde_unit or 'Not entered' }}</p>{{ reading_diagrams(batch_c_values, reading_positions) }}</section>
+<section class="card"><h2>Other Optionals</h2><dl class="details-grid">{% for name, label in [('vibration_limit_switch', 'Vibration Limit Switch'), ('oil_level_switch', 'Oil Level Switch')] %}<dt>{{ label }}</dt><dd>{{ batch_c_values[name] or 'Not entered' }}</dd>{% endfor %}</dl></section>

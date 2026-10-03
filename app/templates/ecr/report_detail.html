@@ -24,4 +24,6 @@
 {% if not series_known %}<p class="muted">Legacy Cooling Tower Series: drivetrain applicability is unclassified. Saved data is preserved.</p>{% endif %}
 {% include "ecr/page1_readonly.html" %}
 {% include "ecr/page2_readonly.html" %}
+{% include "ecr/batch_c_readonly.html" %}
 {% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/reading_instruments.js') }}?v=1" defer></script>{% endblock %}

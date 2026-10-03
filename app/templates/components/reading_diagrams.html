@@ -1,0 +1,36 @@
+{% macro reading_diagrams(values, positions, editable=false) %}
+<div class="reading-diagrams">
+  {% for end in ['de', 'nde'] %}
+  <fieldset class="reading-diagram{% if not editable %} reading-diagram-readonly{% endif %}" data-reading-diagram="{{ end }}" data-reading-unit-value="{{ values.de_nde_unit }}">
+    <legend>{{ end | upper }} <span class="reading-unit" data-reading-unit>{{ values.de_nde_unit or '—' }}</span></legend>
+    <div class="reading-layout">
+      <svg class="reading-cross" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <defs><clipPath id="reading-clip-{{ end }}"><circle cx="60" cy="60" r="53"/></clipPath></defs>
+        <circle cx="60" cy="60" r="54" fill="none" vector-effect="non-scaling-stroke" data-reading-outline/>
+        <g clip-path="url(#reading-clip-{{ end }})">
+          <line x1="60" y1="6" x2="60" y2="114" vector-effect="non-scaling-stroke" data-reading-vertical/>
+          <line x1="6" y1="60" x2="114" y2="60" vector-effect="non-scaling-stroke" data-reading-horizontal/>
+        </g>
+      </svg>
+      {% for position in positions %}{% set name = end ~ '_' ~ position %}
+      {% if editable %}
+      <div class="reading-position reading-{{ position }}">
+        <label for="{{ name }}">{{ position | capitalize }} *</label>
+        <input class="reading-input" id="{{ name }}" name="{{ name }}" type="number" inputmode="decimal" min="-1" max="1" step="0.01" data-batch_c-field data-decimal value="{{ values[name] }}" aria-label="{{ end | upper }} {{ position | capitalize }}">
+        <div class="reading-actions">
+          <button class="secondary" type="button" data-reading-step="-1" data-reading-target="{{ name }}" aria-label="Decrease {{ end | upper }} {{ position }} by 0.01">−</button>
+          <button class="secondary" type="button" data-reading-step="1" data-reading-target="{{ name }}" aria-label="Increase {{ end | upper }} {{ position }} by 0.01">+</button>
+        </div>
+      </div>
+      {% else %}
+      <dl class="reading-position reading-{{ position }}">
+        <dt>{{ position | capitalize }}</dt>
+        <dd class="reading-value" data-reading-raw="{{ values[name] }}" data-reading-value="{{ name }}">{{ values[name] if values[name] != '' else '—' }}</dd>
+      </dl>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </fieldset>
+  {% endfor %}
+</div>
+{% endmacro %}

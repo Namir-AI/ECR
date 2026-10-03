@@ -47,7 +47,7 @@ const initializeDraftAutosave = () => {
       erection_completion_date: form.elements.namedItem("erection_completion_date").value,
     };
     if (seriesSelect) values.cooling_tower_series = seriesSelect.value;
-    ["page1", "page2"].forEach((page) => {
+    ["page1", "page2", "batch_c"].forEach((page) => {
       if (!form.elements.namedItem(`${page}_present`)) return;
       values[page] = {};
       form.querySelectorAll(`[data-${page}-field]:not(:disabled)`).forEach((field) => {
@@ -59,13 +59,23 @@ const initializeDraftAutosave = () => {
       values.page1.blade_serials = Array.from(form.querySelectorAll('[name="blade_serials"]'))
         .map((field) => field.value.trim()).filter(Boolean);
     }
+    if (values.batch_c) {
+      values.batch_c.fastener_rows = Array.from(form.querySelectorAll("[data-torque-row]")).map((row) => {
+        const values = { category: row.dataset.category };
+        row.querySelectorAll("[data-torque-field]").forEach((field) => {
+          const value = field.value.trim();
+          values[field.dataset.torqueField] = field.hasAttribute("data-decimal") ? decimalKey(value) : value;
+        });
+        return values;
+      }).filter(row => row.diameter !== "" || row.torque !== "" || row.torque_unit !== "");
+    }
     return values;
   };
   const sameValues = (left, right) => (
     left.erection_start_date === right.erection_start_date &&
     left.erection_completion_date === right.erection_completion_date &&
     (!Object.hasOwn(right, "cooling_tower_series") || left.cooling_tower_series === right.cooling_tower_series) &&
-    ["page1", "page2"].every((page) => !right[page] || (left[page] && Object.keys(right[page]).every((name) =>
+    ["page1", "page2", "batch_c"].every((page) => !right[page] || (left[page] && Object.keys(right[page]).every((name) =>
       JSON.stringify(left[page][name]) === JSON.stringify(right[page][name])
     )))
   );
@@ -231,6 +241,34 @@ const initializeDraftAutosave = () => {
     if (event.target.matches('input:not([type="hidden"]), select')) scheduleSave();
   }));
   form.addEventListener("click", (event) => {
+    const addTorque = event.target.closest("[data-add-torque]");
+    if (addTorque) {
+      const category = addTorque.closest("[data-torque-category]");
+      const row = category.querySelector("template").content.cloneNode(true);
+      const input = row.querySelector("input");
+      category.querySelector("[data-torque-list]").append(row);
+      input.focus();
+      scheduleSave();
+    }
+    const removeTorque = event.target.closest("[data-remove-torque]");
+    if (removeTorque) {
+      const category = removeTorque.closest("[data-torque-category]");
+      removeTorque.closest("[data-torque-row]").remove();
+      category.querySelector("[data-add-torque]").focus();
+      scheduleSave();
+    }
+    const step = event.target.closest("[data-reading-step]");
+    if (step) {
+      const input = form.elements.namedItem(step.dataset.readingTarget);
+      // Integer hundredths avoid accumulated floating-point drift. Never round
+      // an invalid direct entry into a valid reading via the adjustment buttons.
+      if (!input.validity.valid) { input.reportValidity(); return; }
+      const current = input.value === "" ? 0 : Math.round(Number(input.value) * 100);
+      const next = current + Number(step.dataset.readingStep);
+      if (next < -100 || next > 100) return;
+      input.value = (next / 100).toFixed(2);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
     if (event.target.closest("[data-add-blade]")) {
       const row = form.querySelector("[data-blade-template]").content.cloneNode(true);
       const input = row.querySelector("input");

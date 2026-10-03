@@ -35,8 +35,9 @@
     {% include "ecr/page1_fields.html" %}
     <h2>Page 2 — Technical Data</h2>
     {% include "ecr/page2_fields.html" %}
+    {% include "ecr/batch_c_fields.html" %}
   </form>
   {% if series_editable %}{% include "ecr/series_confirmation.html" %}{% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/nonnegative_decimal.js') }}?v=2" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=5" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/nonnegative_decimal.js') }}?v=2" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/reading_instruments.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=6" defer></script>{% endblock %}
