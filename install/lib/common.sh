@@ -321,6 +321,9 @@ prepare_release() (
     # A subshell gives prepare_release its own EXIT cleanup even when called via
     # command substitution. Explicit errexit avoids Bash's substitution default.
     set -Eeuo pipefail
+    # Application/runtime code must be service-readable even when the launcher
+    # uses 0077. This subshell's build mask never changes bootstrap/secrets.
+    umask 0022
     trap - ERR
     local commit=$1
     local timestamp short_commit release_dir

@@ -535,6 +535,138 @@ new_release=$(prepare_release {Q(target)})
     assert (base / "current").resolve() == base / "releases/old"
 
 
+@pytest.mark.parametrize("caller_umask", ["0077", "0022"])
+def test_release_build_permissions_are_independent_of_caller_umask(
+    deployment, tmp_path, caller_umask
+):
+    # Real Git and a native venv; uv/root/service identity are simulated.
+    # Public permission bits model an account other than the build owner.
+    base, source, _config, *_ = deployment
+    (source / "app/__init__.py").write_text("")
+    (source / "app/db").mkdir()
+    (source / "app/db/__init__.py").write_text("")
+    (source / "app/db/check.py").write_text(
+        "import deployment_package_probe\n"
+        "assert deployment_package_probe.VALUE == 'installed'\n"
+    )
+    git("add", ".", cwd=source)
+    git("commit", "-qm", "permission probe application fixture", cwd=source)
+    git(f"--git-dir={base / 'repository.git'}", "fetch", "origin", "main:main")
+    target = git("rev-parse", "HEAD", cwd=source)
+    cache_file = base / "shared/uv-cache/package-probe.py"
+    cache_file.write_text("VALUE = 'installed'\n")
+    cache_file.chmod(0o444)
+    runtime = executable(
+        base / "shared/uv-python/cpython/bin/python3.12",
+        f'exec {Q(sys.executable)} "$@"\n',
+    )
+    fingerprints = {
+        path: (path.read_bytes(), path.stat().st_mode, path.stat().st_mtime_ns)
+        for path in (cache_file, runtime)
+    }
+    (base / "shared/.env").chmod(0o640)
+    sync_code = """
+import os
+import sys
+import venv
+from pathlib import Path
+
+release, cached = map(Path, sys.argv[1:])
+environment = release / '.venv'
+venv.EnvBuilder(with_pip=False).create(environment)
+site = next((environment / 'lib').glob('python*/site-packages'))
+os.link(cached, site / 'deployment_package_probe.py')
+for command in ('alembic', 'uvicorn'):
+    entry = environment / 'bin' / command
+    entry.write_text(
+        '#!' + str(environment / 'bin/python') + '\\n'
+        'import deployment_package_probe, app.main\\n'
+        'assert deployment_package_probe.VALUE == "installed"\\n'
+    )
+    entry.chmod(entry.stat().st_mode | 0o111)
+"""
+    bins = tmp_path / "permission-bin"
+    build_mask = tmp_path / "uv-build-mask"
+    executable(
+        bins / "uv",
+        f"""
+set -Eeuo pipefail
+case "$1 ${{2:-}}" in
+    'python install') exit 0;;
+    'python find') printf '%s\\n' {Q(str(runtime))};;
+    sync*)
+        printf '%s' "$(umask)" >{Q(str(build_mask))}
+        [[ $* == *'--frozen --no-dev'* ]]
+        [[ $* == *'--managed-python --no-python-downloads'* ]]
+        [[ $* == *{Q(str(runtime))}* ]]
+        exec {Q(sys.executable)} -c {Q(sync_code)} "$3" {Q(str(cache_file))};;
+    *) exit 91;;
+esac
+""",
+    )
+    result = bash(f"""
+source {Q(str(COMMON))}
+{PRIVILEGE_STUBS}
+ECR_INSTALL_DIR={Q(str(base))}; ECR_SERVICE_USER=mock_service
+export PATH={Q(str(bins))}:$PATH
+umask {caller_umask}
+mkdir "$ECR_INSTALL_DIR/state/private-before"
+printf 'private' >"$ECR_INSTALL_DIR/state/private-before/token"
+release=$(prepare_release {Q(target)})
+[[ $(umask) == {caller_umask} ]]
+mkdir "$ECR_INSTALL_DIR/state/private-after"
+printf 'private' >"$ECR_INSTALL_DIR/state/private-after/token"
+# Service identity is mocked, so do not create root-owned bytecode at runtime
+# under the caller's private mask while inspecting build-time permissions.
+export PYTHONPATH="$release" PYTHONDONTWRITEBYTECODE=1
+run_db_check "$release"
+run_migrations "$release"
+(cd "$release" && run_as_service "$release/.venv/bin/uvicorn" app.main:app)
+printf '%s' "$release"
+""")
+    assert result.returncode == 0, result.stderr
+    release = Path(result.stdout)
+    assert git("-C", release, "rev-parse", "HEAD") == target
+    # Every newly built directory can be traversed/read by a non-owner, while
+    # app/package source is readable and CLI entrypoints remain executable.
+    for node in [release, *release.rglob("*")]:
+        if node.is_symlink():
+            continue
+        mode = node.stat().st_mode
+        if node.is_dir():
+            assert mode & 0o005 == 0o005, node
+        else:
+            assert mode & 0o004, node
+    for entry in ("python", "alembic", "uvicorn"):
+        command = release / ".venv/bin" / entry
+        assert command.stat().st_mode & 0o005 == 0o005
+        assert os.access(command, os.R_OK | os.X_OK)
+    assert release.stat().st_mode & 0o777 == 0o755
+    assert (release / ".venv").stat().st_mode & 0o777 == 0o755
+    assert build_mask.read_text() == "0022"
+    assert (release / ".env").is_symlink()
+    assert (release / ".env").resolve() == base / "shared/.env"
+    assert (base / "shared/.env").stat().st_mode & 0o777 == 0o640
+    package = next((release / ".venv/lib").glob("python*/site-packages"))
+    assert (
+        package / "deployment_package_probe.py"
+    ).stat().st_ino == cache_file.stat().st_ino
+    for path, fingerprint in fingerprints.items():
+        assert (
+            path.read_bytes(),
+            path.stat().st_mode,
+            path.stat().st_mtime_ns,
+        ) == fingerprint
+    for name in ("private-before", "private-after"):
+        private = base / "state" / name
+        assert private.stat().st_mode & 0o777 == (
+            0o700 if caller_umask == "0077" else 0o755
+        )
+        assert (private / "token").stat().st_mode & 0o777 == (
+            0o600 if caller_umask == "0077" else 0o644
+        )
+
+
 @pytest.mark.parametrize("ref", ["commit", "main", "release-tag"])
 @pytest.mark.parametrize("broken", [False, True])
 def test_launcher_uses_target_not_current(deployment, tmp_path, broken, ref):
@@ -546,7 +678,14 @@ def test_launcher_uses_target_not_current(deployment, tmp_path, broken, ref):
     else:
         executable(
             source / "install/update.sh",
-            f"printf '%s' \"$ECR_BOOTSTRAP_COMMIT\" >{Q(str(marker))}\n",
+            f"""
+[[ $(umask) == 0077 ]]
+bootstrap=$(dirname -- "$(dirname -- "${{BASH_SOURCE[0]}}")")
+[[ $(stat -c %a -- "$bootstrap") == 700 ]]
+private_file=$(mktemp "$bootstrap/private.XXXXXXXX")
+[[ $(stat -c %a -- "$private_file") == 600 ]]
+printf '%s' "$ECR_BOOTSTRAP_COMMIT" >{Q(str(marker))}
+""",
         )
     git("add", ".", cwd=source)
     git("commit", "-qm", "new target tooling", cwd=source)
@@ -572,6 +711,8 @@ launcher_main {Q(requested)}
     else:
         assert result.returncode == 0, result.stderr
         assert marker.read_text() == target
+        assert marker.stat().st_mode & 0o777 == 0o600
+    assert (tmp_path / "lock").stat().st_mode & 0o777 == 0o600
 
 
 def test_launcher_requires_root():
