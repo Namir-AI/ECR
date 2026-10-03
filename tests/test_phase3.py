@@ -244,7 +244,12 @@ def test_cell_numbers_and_declared_cells_are_independent(
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("cell_no", 0), ("cell_no", -1), ("declared_no_of_cells", 0), ("declared_no_of_cells", -2)],
+    [
+        ("cell_no", 0),
+        ("cell_no", -1),
+        ("declared_no_of_cells", 0),
+        ("declared_no_of_cells", -2),
+    ],
 )
 def test_non_positive_cell_values_are_rejected(field: str, value: int) -> None:
     with pytest.raises(ValidationError):
@@ -258,7 +263,9 @@ def test_duplicate_report_policy_and_multiple_supervisors(
     first_supervisor = user_factory(employee_id="P3-DUPLICATE-A")
     second_supervisor = user_factory(employee_id="P3-DUPLICATE-B")
     serial = _serial()
-    first = create_or_resume_draft(db_session, first_supervisor, _draft_input(serial, cell_no=1))
+    first = create_or_resume_draft(
+        db_session, first_supervisor, _draft_input(serial, cell_no=1)
+    )
     db_session.commit()
     resumed = create_or_resume_draft(
         db_session,
@@ -269,7 +276,9 @@ def test_duplicate_report_policy_and_multiple_supervisors(
     assert resumed.report.id == first.report.id
 
     with pytest.raises(ExistingReportError):
-        create_or_resume_draft(db_session, second_supervisor, _draft_input(serial, cell_no=1))
+        create_or_resume_draft(
+            db_session, second_supervisor, _draft_input(serial, cell_no=1)
+        )
 
     different_cell = create_or_resume_draft(
         db_session,
@@ -391,14 +400,17 @@ def test_supervisor_visibility_and_non_owner_autosave_are_scoped(
     assert owner_report.tower.package.cooling_tower_serial_no in dashboard.text
     assert other_report.tower.package.cooling_tower_serial_no not in dashboard.text
     assert client.get(f"/ecr/reports/{other_report.id}/edit").status_code == 404
-    assert client.post(
-        f"/ecr/reports/{other_report.id}/autosave",
-        data={
-            "csrf_token": csrf_from(dashboard.text),
-            "erection_start_date": "",
-            "erection_completion_date": "2026-10-01",
-        },
-    ).status_code == 404
+    assert (
+        client.post(
+            f"/ecr/reports/{other_report.id}/autosave",
+            data={
+                "csrf_token": csrf_from(dashboard.text),
+                "erection_start_date": "",
+                "erection_completion_date": "2026-10-01",
+            },
+        ).status_code
+        == 404
+    )
 
 
 def test_branch_admin_and_superadmin_report_visibility_is_read_only(
@@ -422,10 +434,13 @@ def test_branch_admin_and_superadmin_report_visibility_is_read_only(
     assert mumbai_report.tower.package.cooling_tower_serial_no not in listing.text
     assert client.get(f"/reports/{mumbai_report.id}").status_code == 404
     assert client.get("/ecr/reports/new").status_code == 403
-    assert client.post(
-        f"/ecr/reports/{delhi_report.id}/autosave",
-        data={"csrf_token": csrf_from(listing.text)},
-    ).status_code == 403
+    assert (
+        client.post(
+            f"/ecr/reports/{delhi_report.id}/autosave",
+            data={"csrf_token": csrf_from(listing.text)},
+        ).status_code
+        == 403
+    )
     client.cookies.clear()
 
     login(client, superadmin.employee_id)
@@ -435,11 +450,8 @@ def test_branch_admin_and_superadmin_report_visibility_is_read_only(
     assert client.get(f"/reports/{delhi_report.id}").status_code == 200
     assert client.get(f"/reports/{mumbai_report.id}").status_code == 200
     assert client.get("/ecr/reports/new").status_code == 403
-    assert not any(
-        "POST" in (getattr(route, "methods", set()) or set())
-        and getattr(route, "path", "").startswith("/reports/")
-        for route in client.app.routes
-    )
+    # Phase 5 introduces scoped Admin edits and approval, never creation.
+    assert client.post("/ecr/reports", data={}).status_code == 403
 
 
 def test_autosave_persists_valid_dates_rejects_crafted_identity_and_invalid_data(
@@ -482,7 +494,7 @@ def test_autosave_persists_valid_dates_rejects_crafted_identity_and_invalid_data
         data={
             "csrf_token": token,
             "erection_start_date": "",
-            "erection_completion_date": "",
+            "erection_completion_date": "not-a-date",
         },
     )
     assert invalid.status_code == 422
@@ -540,7 +552,9 @@ def test_autosave_rejects_visual_or_invalid_date_strings(
     assert report.erection_completion_date == original_completion
 
 
-def test_autosave_rejects_bad_csrf_without_persistence(client, db_session, user_factory):
+def test_autosave_rejects_bad_csrf_without_persistence(
+    client, db_session, user_factory
+):
     supervisor = user_factory()
     report = _create_report(db_session, supervisor)
     original_completion = report.erection_completion_date
@@ -634,7 +648,10 @@ def test_phase3_dashboard_navigation_and_autosave_ui_contract(
     assert "My Previous Reports" in dashboard.text
     assert '<svg class="nav-icon"' in dashboard.text
     new_report = client.get("/ecr/reports/new")
-    assert 'class="nav-item is-active" href="/dashboard" aria-current="page"' in new_report.text
+    assert (
+        'class="nav-item is-active" href="/ecr/reports/new" aria-current="page"'
+        in new_report.text
+    )
 
     autosave_script = client.get("/static/ecr_autosave.js")
     assert autosave_script.status_code == 200
@@ -647,5 +664,7 @@ def test_phase3_dashboard_navigation_and_autosave_ui_contract(
     login(client, superadmin.employee_id)
     reports = client.get("/reports")
     assert reports.status_code == 200
-    assert 'class="nav-item is-active" href="/reports" aria-current="page"' in reports.text
-    assert "Reports across all historical branches" in reports.text
+    assert (
+        'class="nav-item is-active" href="/reports" aria-current="page"' in reports.text
+    )
+    assert "All Reports Overview" in reports.text

@@ -1,5 +1,6 @@
 """Central model imports used by Alembic metadata discovery."""
 
+from app.audit.models import ReportAuditEvent
 from app.auth.models import UserSession
 from app.branches.models import Branch
 from app.ecr.models import (
@@ -25,6 +26,7 @@ __all__ = [
     "EcrReport",
     "EcrTower",
     "PasswordResetRequest",
+    "ReportAuditEvent",
     "User",
     "UserSession",
 ]

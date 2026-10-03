@@ -3,6 +3,8 @@
 {% block content %}
 <section class="card">
   <div class="heading-row"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div><a href="{{ back_url | default('/reports') }}">Back to reports</a></div>
+  {% include 'ecr/workflow_actions.html' %}
+  {% if validation_errors %}<section class="validation-summary" role="alert"><h2>Fields to complete or correct</h2>{% for section, errors in validation_errors.items() %}<h3>{{ section }}</h3><ul>{% for issue in errors %}<li>{{ issue }}</li>{% endfor %}</ul>{% endfor %}</section>{% endif %}
   <dl class="details-grid">
     <dt>Status</dt><dd><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></dd>
     <dt>Branch</dt><dd>{{ report.branch.name }}</dd>
@@ -17,7 +19,10 @@
     <dt>No. of Cells (this tower)</dt><dd>{{ report.tower.declared_no_of_cells or 'Not provided' }}</dd>
     <dt>Cell No.</dt><dd>{{ report.cell_no }}</dd>
     <dt>Erection Start Date</dt><dd>{{ report.erection_start_date.isoformat() if report.erection_start_date else 'Not provided' }}</dd>
-    <dt>Erection Completion Date</dt><dd>{{ report.erection_completion_date.isoformat() }}</dd>
+    <dt>Erection Completion Date</dt><dd>{{ report.erection_completion_date.isoformat() if report.erection_completion_date else 'Not provided' }}</dd>
+    {% if report.reviewed_at %}<dt>Reviewed on</dt><dd>{{ report.reviewed_at }} UTC</dd>{% endif %}
+    {% if report.submitted_at %}<dt>Submitted on</dt><dd>{{ report.submitted_at }} UTC</dd>{% endif %}
+    {% if report.approved_at %}<dt>Approved on</dt><dd>{{ report.approved_at }} UTC</dd>{% endif %}
     <dt>Last Updated</dt><dd>{{ report.updated_at.strftime('%Y-%m-%d %H:%M') }}</dd>
   </dl>
 </section>
@@ -26,5 +31,6 @@
 {% include "ecr/page2_readonly.html" %}
 {% include "ecr/batch_c_readonly.html" %}
 {% include "ecr/page3_readonly.html" %}
+{% include 'ecr/action_confirmation.html' %}
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', path='/reading_instruments.js') }}?v=1" defer></script>{% endblock %}

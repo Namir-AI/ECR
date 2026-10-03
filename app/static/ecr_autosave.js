@@ -44,7 +44,7 @@ const initializeDraftAutosave = () => {
   const currentValues = () => {
     const values = {
       erection_start_date: form.elements.namedItem("erection_start_date").value || null,
-      erection_completion_date: form.elements.namedItem("erection_completion_date").value,
+      erection_completion_date: form.elements.namedItem("erection_completion_date").value || null,
     };
     if (seriesSelect) values.cooling_tower_series = seriesSelect.value;
     ["page1", "page2", "batch_c", "page3"].forEach((page) => {
@@ -79,10 +79,13 @@ const initializeDraftAutosave = () => {
       JSON.stringify(left[page][name]) === JSON.stringify(right[page][name])
     )))
   );
+  let lastCommittedValues = currentValues();
 
   const showStatus = (message, state) => {
     status.textContent = message;
     status.dataset.state = state;
+    const review = document.querySelector('[data-review-report]');
+    if (review) review.disabled = state !== 'saved' && state !== 'unchanged';
   };
 
   const restoreSeries = async () => {
@@ -189,6 +192,7 @@ const initializeDraftAutosave = () => {
         lastSavedSeries = result.values.cooling_tower_series;
         form.dataset.storedSeries = lastSavedSeries;
       }
+      lastCommittedValues = sentValues;
       // An old acknowledgement cannot mark a newer edit as saved.
       if (sentRevision === revision && sameValues(sentValues, currentValues())) {
         dirty = false;
@@ -222,6 +226,16 @@ const initializeDraftAutosave = () => {
   };
 
   const scheduleSave = () => {
+    // A blur/change event after an acknowledged input is not a new edit. In
+    // particular it must not disable Review between pointer-down and click.
+    if (!saving && !needsReload && sameValues(currentValues(), lastCommittedValues)) {
+      clearTimeout(debounceTimer);
+      clearTimeout(retryTimer);
+      dirty = false;
+      saveRequested = false;
+      showStatus('All changes saved', 'unchanged');
+      return;
+    }
     revision += 1;
     dirty = true;
     clearTimeout(debounceTimer);
@@ -231,7 +245,7 @@ const initializeDraftAutosave = () => {
       showStatus("Saving…", "saving");
     } else {
       showStatus("Unsaved changes", "pending");
-      debounceTimer = window.setTimeout(save, 700);
+      if (!form.hasAttribute('data-explicit-save')) debounceTimer = window.setTimeout(save, 700);
     }
   };
 

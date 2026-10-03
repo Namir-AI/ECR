@@ -161,7 +161,14 @@ class EcrReport(Base):
         nullable=False,
     )
     erection_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    erection_completion_date: Mapped[date] = mapped_column(Date, nullable=False)
+    erection_completion_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True
+    )
+    approved_by: Mapped[User | None] = relationship(foreign_keys=[approved_by_user_id])
     status: Mapped[EcrReportStatus] = mapped_column(
         Enum(
             EcrReportStatus,

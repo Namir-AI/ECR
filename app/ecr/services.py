@@ -271,7 +271,7 @@ def list_admin_reports(
 
 
 def get_admin_visible_report(
-    db: Session, report_id: int, admin: User
+    db: Session, report_id: int, admin: User, *, lock: bool = False
 ) -> EcrReport | None:
     statement = (
         select(EcrReport)
@@ -280,6 +280,24 @@ def get_admin_visible_report(
     )
     if admin.role is UserRole.BRANCH_ADMIN:
         statement = statement.where(EcrReport.branch_id == admin.branch_id)
+    if lock:
+        package_query = (
+            select(EcrTower.package_id).join(EcrReport).where(EcrReport.id == report_id)
+        )
+        if admin.role is UserRole.BRANCH_ADMIN:
+            package_query = package_query.where(EcrReport.branch_id == admin.branch_id)
+        package_id = db.scalar(package_query)
+        if package_id is None:
+            return None
+        db.scalar(
+            select(EcrPackage)
+            .where(EcrPackage.id == package_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        statement = statement.with_for_update().execution_options(
+            populate_existing=True
+        )
     return db.scalar(statement)
 
 

@@ -56,6 +56,85 @@ a { color: var(--brand-link); }
 .nav-logout { border-color: #0003; }
 
 .page-shell { width: min(72rem, calc(100% - 2rem)); margin: 1.5rem auto; }
+.app-content { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+.app-content .page-shell { flex: 1; }
+.authenticated-shell .app-content { margin-left: 14rem; }
+.authenticated-shell .page-shell { width: calc(100% - 2rem); max-width: 96rem; }
+.app-sidebar { position: fixed; inset: 0 auto 0 0; width: 14rem; padding: 1.2rem .8rem; overflow-y: auto; background: #f6fbff; border-right: 1px solid #d7e6f3; z-index: 20; }
+.logo-link { display: grid; justify-items: center; gap: .4rem; color: #163f72; text-decoration: none; font-size: .85rem; margin-bottom: 1.5rem; }
+.paharpur-logo { width: 9rem; height: auto; object-fit: contain; }
+.app-sidebar .primary-nav { display: flex; flex-direction: column; align-items: stretch; gap: .3rem; }
+.app-sidebar .nav-item { white-space: normal; line-height: 1.25; color: #163f72; padding: .7rem .6rem; }
+.app-sidebar .nav-item.is-active { background: #d7edff; border-color: #b7d8f5; box-shadow: none; }
+.app-sidebar .nav-form { margin-top: 1rem; }
+.app-sidebar .nav-logout { width: 100%; }
+.nav-group-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: #526272; margin: .65rem .6rem 0; }
+.coming-soon small { display: block; font-size: .65rem; font-weight: 400; }
+.app-footer { display: flex; gap: .5rem; justify-content: flex-end; align-items: center; padding: 1rem 1.5rem; color: #486384; font-size: .8rem; }
+.app-footer svg { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.mobile-header { display: none; }
+.dashboard-hero { padding: 1.3rem 1.5rem; background: linear-gradient(110deg, #84baf0, #d5efff); border-radius: .65rem; color: #102744; margin-bottom: 1rem; }
+.dashboard-hero h1 { margin-bottom: .35rem; font-size: clamp(1.5rem, 2.4vw, 2rem); }
+.dashboard-hero p { margin: .35rem 0; }
+.dashboard-panel { border: 1px solid #c8e0f5; border-radius: .65rem; padding: 1.2rem; background: white; }
+.dashboard-panel h2 { margin: 0; }
+.dashboard-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1rem 0; }
+.dashboard-filters label { min-width: 12rem; }
+.status-filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+.secondary.filter-active { background: #d7edff; border-color: var(--paharpur-blue); }
+.package-card { border: 1px solid #bbdcf7; border-radius: .55rem; overflow: hidden; margin: 1rem 0; }
+.package-heading { display: flex; align-items: center; gap: .75rem; background: #edf8ff; padding-right: .8rem; }
+.collapse-heading { display: flex; flex: 1; width: 100%; text-align: left; justify-content: flex-start; background: transparent; border: none; border-radius: 0; color: #173653; gap: .8rem; padding: .8rem; font-size: 1rem; }
+.collapse-heading strong { display: block; }
+.collapse-heading small { display: block; margin-top: .3rem; color: #405f7d; font-size: .78rem; font-weight: 400; }
+.tower-symbol { width: 2.8rem; height: 2.8rem; display: grid; place-items: center; background: #d8edff; border-radius: .4rem; flex-shrink: 0; }
+.tower-symbol svg { width: 1.8rem; height: 1.8rem; }
+.collapse-chevron { margin-left: auto; }
+.collapse-heading[aria-expanded="false"] .collapse-chevron { transform: rotate(180deg); }
+.package-body { padding: .5rem .65rem; }
+.tower-card { border: 1px solid #dae8f5; border-radius: .5rem; overflow: hidden; margin-bottom: .65rem; }
+.tower-heading { background: #e9f6ff; }
+.cell-table { font-size: .78rem; }
+.cell-table th, .cell-table td { padding: .55rem .5rem; }
+.cell-table thead th { color: #2d4f70; background: #f0f8ff; font-size: .72rem; }
+.cell-table td { vertical-align: middle; }
+.row-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.row-actions form { margin: 0; display: block; }
+.button.compact-action, button.compact-action { padding: .3rem .6rem; font-size: .75rem; min-height: 2rem; white-space: nowrap; }
+.cell-table .row-actions { flex-wrap: nowrap; }
+.tower-actions { padding: .65rem; }
+.button.accent, button.accent { background: var(--paharpur-orange); border-color: var(--paharpur-orange); color: #1d160f; }
+.status-not-started { background: #e9edf2; color: #485466; }
+.workflow-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
+.validation-summary { border-left: 3px solid var(--paharpur-orange); padding: 1rem; background: #fff6ed; }
+.search-form { grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 2fr) auto; align-items: end; }
+[hidden] { display: none; }
+@media (max-width: 1100px) {
+  .cell-table, .cell-table tbody, .cell-table tr, .cell-table td, .cell-table th { display: block; }
+  .cell-table thead { display: none; }
+  .cell-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: .5rem; border-bottom: 1px solid var(--border); gap: .2rem; }
+  .cell-table td, .cell-table th { border: none; min-width: 0; overflow-wrap: anywhere; }
+  .cell-table td::before { content: attr(data-label); display: block; font-size: .65rem; color: #526272; margin-bottom: .2rem; }
+  .cell-table td[data-label="Actions"] { grid-column: 1 / -1; }
+  .cell-table .row-actions { flex-wrap: wrap; }
+}
+@media (max-width: 760px) {
+  .authenticated-shell .app-content { margin-left: 0; min-height: calc(100vh - 4rem); }
+  .authenticated-shell .page-shell { width: calc(100% - 1rem); }
+  .mobile-header { display: flex; align-items: center; justify-content: space-between; padding: .5rem 1rem; min-height: 4rem; background: #edf6ff; }
+  .mobile-header .brand { white-space: normal; font-size: .9rem; }
+  .app-sidebar { display: none; top: 4rem; box-shadow: .5rem 0 1.5rem #14274030; }
+  .navigation-open .app-sidebar { display: block; }
+  .dashboard-hero { padding: 1rem; }
+  .dashboard-panel { padding: .75rem; }
+  .package-heading { flex-wrap: wrap; padding-right: 0; }
+  .package-heading > .compact-action { margin: 0 .8rem .6rem; }
+  .collapse-heading { gap: .5rem; padding: .6rem; font-size: .9rem; }
+  .tower-symbol { width: 2rem; height: 2rem; }
+  .tower-symbol svg { width: 1.3rem; height: 1.3rem; }
+  .package-body { padding: .4rem; }
+  .search-form { grid-template-columns: 1fr; }
+}
 .card { padding: clamp(1rem, 3vw, 2rem); border: 1px solid var(--border); border-radius: 0.75rem; background: var(--surface); box-shadow: 0 0.2rem 0.8rem #0f172a12; }
 .auth-card { max-width: 34rem; margin-inline: auto; }
 h1 { margin-top: 0; }

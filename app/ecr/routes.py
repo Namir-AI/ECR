@@ -21,6 +21,7 @@ from app.core.templates import render_template
 from app.core.time import utc_now
 from app.ecr import batch_c, page1, page2, page3
 from app.ecr.models import EcrReportStatus
+from app.ecr.operations import grouped_reports, visible_reports
 from app.ecr.page1 import (
     FINAL_REQUIRED_FIELDS,
     SECTIONS,
@@ -46,9 +47,9 @@ from app.ecr.services import (
     find_package_by_serial,
     get_admin_visible_report,
     get_supervisor_report,
-    list_admin_reports,
     update_series,
 )
+from app.ecr.workflow import audit_edits, report_snapshot
 from app.storage import get_protected_storage
 from app.users.models import UserRole
 
@@ -359,18 +360,41 @@ def autosave(
     erection_completion_date: Annotated[str, Form()] = "",
 ) -> JSONResponse:
     validate_csrf(request, csrf_token, request.app.state.settings)
-    report = get_supervisor_report(db, report_id, supervisor.id, lock=True)
+    admin_edit = supervisor.role in (UserRole.BRANCH_ADMIN, UserRole.SUPERADMIN)
+    try:
+        report = (
+            get_admin_visible_report(db, report_id, supervisor, lock=True)
+            if admin_edit
+            else get_supervisor_report(db, report_id, supervisor.id, lock=True)
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        return JSONResponse(
+            {"ok": False, "message": "Unable to save — retrying"}, status_code=503
+        )
     if report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
         )
     try:
+        if admin_edit:
+            if report.status is EcrReportStatus.APPROVED:
+                raise DraftNotEditableError("Approved reports are locked.")
+            if cooling_tower_series is not None:
+                raise EcrIdentityError(
+                    "Shared package fields cannot be changed by ordinary report editing."
+                )
+        before = report_snapshot(report) if admin_edit else None
         data = DraftAutosaveInput(
             erection_start_date=erection_start_date,
             erection_completion_date=erection_completion_date,
         )
-        autosave_draft(report, data)
-        update_series(db, report, supervisor, cooling_tower_series)
+        if admin_edit:
+            report.erection_start_date = data.erection_start_date
+            report.erection_completion_date = data.erection_completion_date
+        else:
+            autosave_draft(report, data)
+            update_series(db, report, supervisor, cooling_tower_series)
         series = report.tower.package.cooling_tower_series
         technical = (
             Page1DraftInput(
@@ -408,6 +432,8 @@ def autosave(
             batch_c.save(db, report, batch_c_data)
         if page3_form is not None:
             page3.save_text(db, report, page3.Page3DraftInput(**page3_form))
+        if admin_edit:
+            audit_edits(db, report, supervisor, before)
         db.commit()
     except ValidationError as exc:
         db.rollback()
@@ -447,7 +473,9 @@ def autosave(
                     if report.erection_start_date
                     else None
                 ),
-                "erection_completion_date": report.erection_completion_date.isoformat(),
+                "erection_completion_date": report.erection_completion_date.isoformat()
+                if report.erection_completion_date
+                else None,
                 **(
                     {
                         "page1": {
@@ -646,15 +674,22 @@ def admin_report_list(
     db: DatabaseSession,
     admin: ManagementAdmin,
     branch_id: int | None = Query(default=None),
+    status_filter: str = Query(default=""),
 ) -> Response:
     selected_branch = branch_id if admin.role is UserRole.SUPERADMIN else None
-    reports = list_admin_reports(db, admin, branch_id=selected_branch)
+    if status_filter and status_filter not in {s.value for s in EcrReportStatus}:
+        raise HTTPException(422, "Select a valid report status.")
+    reports = visible_reports(
+        db, admin, branch_id=selected_branch, status=status_filter
+    )
     return render_template(
         request,
-        "ecr/admin_reports.html",
+        "ecr/operational_dashboard.html",
         {
             "current_user": admin,
             "reports": reports,
+            "groups": grouped_reports(db, admin, reports),
+            "status_filter": status_filter,
             "branches": list_branches(db) if admin.role is UserRole.SUPERADMIN else [],
             "selected_branch_id": selected_branch,
         },

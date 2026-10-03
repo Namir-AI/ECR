@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}{{ current_user.role.value.replace('_', ' ').title() }} Dashboard — Paharpur ECR{% endblock %}
+{% block content %}
+{% set supervisor = current_user.role.value == 'SUPERVISOR' %}
+<header class="dashboard-hero heading-row"><div><p class="eyebrow">ERECTION &amp; COMMISSIONING</p><h1>{{ 'Supervisor' if supervisor else ('Branch Admin' if current_user.role.value == 'BRANCH_ADMIN' else 'Superadmin') }} Dashboard</h1><p>Welcome, {{ current_user.full_name }} · {{ 'All Branches' if current_user.role.value == 'SUPERADMIN' else current_user.branch.name }}</p></div><div class="row-actions">{% if supervisor %}<a class="button accent" href="/ecr/reports/new">{{ navigation_icon('report-add') }} New Erection &amp; Commissioning Report</a>{% else %}<a class="button secondary" href="/reports/search">Search Reports</a><a class="button accent" href="/dashboard?status_filter=SUBMITTED">Pending Approvals</a>{% endif %}</div></header>
+<section class="dashboard-panel"><h2>{{ 'My Previous Reports' if supervisor else ('Branch Reports — ' ~ current_user.branch.name if current_user.role.value == 'BRANCH_ADMIN' else 'All Reports Overview') }}</h2>
+<p class="muted">{{ 'Your own historical reports remain visible after a branch transfer.' if supervisor else 'View, edit and approve reports within your authorized scope.' }}</p>
+{% if not supervisor %}<form class="dashboard-filters" method="get" action="/dashboard">
+{% if current_user.role.value == 'SUPERADMIN' %}<label>Branch<select name="branch_id"><option value="">All Branches</option>{% for branch in branches %}<option value="{{ branch.id }}"{% if selected_branch_id == branch.id %} selected{% endif %}>{{ branch.name }}</option>{% endfor %}</select></label>{% endif %}
+<div class="status-filters" aria-label="Filter by status">{% for value, label in [('', 'All'), ('SUBMITTED', 'Submitted'), ('DRAFT', 'Draft'), ('REVIEWED', 'Reviewed'), ('APPROVED', 'Approved')] %}<button class="secondary{% if status_filter == value %} filter-active{% endif %}" type="submit" name="status_filter" value="{{ value }}" aria-pressed="{{ 'true' if status_filter == value else 'false' }}">{{ label }}</button>{% endfor %}</div></form>{% endif %}
+{% include 'ecr/grouped_reports.html' %}
+</section>
+{% include 'ecr/action_confirmation.html' %}
+{% endblock %}

@@ -1,1 +1,1 @@
-"""Reusable audit module boundary; persistence begins in a later phase."""
+"""Transactional report workflow and administrator field-change audit."""

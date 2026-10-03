@@ -1,0 +1,4 @@
+<dialog class="series-confirmation" data-action-dialog aria-labelledby="action-title" aria-describedby="action-message">
+  <h2 id="action-title"></h2><p id="action-message"></p>
+  <form method="post" data-action-form><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="cell_no" data-action-cell disabled><div class="row-actions"><button type="button" class="secondary" data-action-cancel>Cancel</button><button type="submit" class="accent" data-action-submit></button></div></form>
+</dialog>

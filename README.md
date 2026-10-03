@@ -428,3 +428,62 @@ Future workflow must lock normal Supervisor signature changes after submission.
 Review/Confirm/Submit, Approval, JCC, Tower Photos, search, PDF, final Gearbox
 lists, controlled Current Drawn correction and audited shared-Series correction
 remain deferred.
+
+## Phase 5 — operational dashboards, workflow, search and approval
+
+Migration `5e7a2d9c104b` follows `4c6d2e9a103f`. It adds nullable review,
+submission and approval timestamps, the approving user FK, and transactional
+`ecr_audit_events`. Completion Date is now nullable for incomplete Cell Drafts;
+final Review/Submit validation still requires it. Existing dates/data/statuses
+are not converted. Run `alembic upgrade head` and the full suite including
+the optional Playwright browser tests described above.
+
+All three dashboards group Package → Tower → Cell. Supervisor visibility is
+own reports, including past branches; Branch Admin uses historical report
+branch scope; Superadmin may filter all branches. Missing declared Cells are
+virtual UI rows, never stored reports. Occupied private Cells are unavailable,
+not "Not started". Large declared counts page virtual rows in batches of 50
+(a presentation limit, not a Cell No. limit).
+
+Supervisors can create a missing Cell or use **+ Add another Cell** (smallest
+positive unused Cell No.). Confirmation creates a blank Draft with no copied
+dates, technical data, text or signature. Declared cell count is descriptive and
+is never silently increased. A multi-tower package creator can **Add Tower**;
+automatic suffix progression stops at Z and creates a blank Cell-1 Draft.
+Single-tower packages cannot be converted here. Shared-Series sole-Draft rules
+remain unchanged.
+
+Workflow is per Cell: **DRAFT → REVIEWED → SUBMITTED → APPROVED**. Review checks
+the centralized owner-approved final-required metadata and supplied-value
+validators, grouped by applicable sections. Zero Current Drawn and DE/NDE
+readings are valid; optional fields/signature and deferred JCC/photos do not
+block. Back to Edit returns REVIEWED to DRAFT and clears `reviewed_at` without
+changing data. Confirm & Submit revalidates and locks Supervisor editing.
+Branch Admin (historical branch) / Superadmin (global) can explicitly save
+report-scoped edits in DRAFT/REVIEWED/SUBMITTED; status remains unchanged.
+They cannot change shared identity/Series or signature evidence. Approval
+revalidates SUBMITTED data, confirms in an accessible modal, records actor/time
+and locks ordinary edits for all roles. Package/report locks serialize these
+operations; audit and business writes commit together. Workflow transitions
+and meaningful Admin field edits record old/new values, actor/role/report/time;
+signature pixels, storage references and authentication secrets are not logged.
+
+**Search Reports** is Admin-only: exact, case-insensitive Cooling Tower base or
+operational Serial No., Motor Serial No., Gearbox Serial No., Drive Shaft Serial
+No., or All. Queries use existing structured serial indexes and scope before
+matching. One authorized result opens the existing full read-only report;
+multiple matches show a grouped chooser. Search never bypasses edit locks.
+
+The common responsive sidebar uses the actual owner-supplied Paharpur logo
+from `app/static/brand`, local SVG icons, and disabled coming-soon Budget/Bills
+entries. The shared footer reads "Developed by: Nazmul Khan". Dashboard reference
+images remain outside the repository; production does not depend on owner_data.
+
+Migration round trips must be performed before entering Phase-5 operational
+data. Downgrade removes workflow/audit metadata and refuses unresolved NULL
+completion dates rather than fabricating dates. Back up populated data before
+any deliberate downgrade. Existing Page-1/2/3 content is preserved.
+
+Deferred: JCC, Tower Photos, PDF, Budget/Bills, final Gearbox lookup lists,
+controlled post-approval Current Drawn correction, audited shared-Series
+correction, and historical display-name snapshot policy for official records.

@@ -2,7 +2,7 @@
 {% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card ecr-form-card">
-  <div class="heading-row"><div><p class="eyebrow">DRAFT</p><h1>{{ report.display_identity }}</h1><p class="muted">Owned by {{ report.supervisor.full_name }} · Branch: {{ report.branch.name }}</p></div><a href="/dashboard">Back to dashboard</a></div>
+  <div class="heading-row"><div><p class="eyebrow">{{ report.status.value }}{% if admin_edit %} — ADMIN EDIT{% endif %}</p><h1>{{ report.display_identity }}</h1><p class="muted">Owned by {{ report.supervisor.full_name }} · Branch: {{ report.branch.name }}</p></div><a href="/dashboard">Back to dashboard</a></div>
   <div class="reference-panel">
     <dl class="details-grid compact-details">
       <dt>Customer</dt><dd>{{ report.tower.package.customer }}</dd>
@@ -13,7 +13,7 @@
       <dt>No. of Cells (this tower)</dt><dd>{{ report.tower.declared_no_of_cells or 'Not provided' }}</dd>
     </dl>
   </div>
-  <form method="post" action="/ecr/reports/{{ report.id }}/autosave" data-autosave-form data-series-state-url="/ecr/reports/{{ report.id }}/series-state" data-stored-series="{{ report.tower.package.cooling_tower_series }}" data-series-rules='{{ series_rules | tojson }}'>
+  <form method="post" action="{{ '/reports/' ~ report.id ~ '/save' if admin_edit else '/ecr/reports/' ~ report.id ~ '/autosave' }}" data-autosave-form{% if admin_edit %} data-explicit-save{% endif %} data-series-state-url="/ecr/reports/{{ report.id }}/series-state" data-stored-series="{{ report.tower.package.cooling_tower_series }}" data-series-rules='{{ series_rules | tojson }}'>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="autosave-bar"><span class="autosave-status" data-autosave-status role="status" aria-live="polite" tabindex="-1">All changes saved</span><button type="submit" class="secondary" data-save-now>Save now</button></div>
     <h2>Report Details</h2>
@@ -30,7 +30,7 @@
     {% endif %}
     <div class="form-grid">
       <label class="form-field"><span class="field-label">Erection Start Date <span class="muted">(optional)</span></span><input class="form-control" type="date" name="erection_start_date" value="{{ report.erection_start_date.isoformat() if report.erection_start_date else '' }}"></label>
-      <label class="form-field"><span class="field-label">Erection Completion Date</span><input class="form-control" type="date" name="erection_completion_date" value="{{ report.erection_completion_date.isoformat() }}" required></label>
+      <label class="form-field"><span class="field-label">Erection Completion Date *</span><input class="form-control" type="date" name="erection_completion_date" value="{{ report.erection_completion_date.isoformat() if report.erection_completion_date else '' }}"></label>
     </div>
     {% include "ecr/page1_fields.html" %}
     <h2>Page 2 — Technical Data</h2>
@@ -38,7 +38,7 @@
     {% include "ecr/batch_c_fields.html" %}
     {% include "ecr/page3_fields.html" %}
   </form>
-  {% include "ecr/customer_signature.html" %}
+  {% if admin_edit %}<section class="reference-panel"><h2>Customer Signature — read-only evidence</h2>{% if report.page3 and report.page3.customer_signature_storage_key %}<img class="customer-signature-image" src="/ecr/reports/{{ report.id }}/signature" alt="Saved customer signature"><p>Signed on: {{ report.page3.customer_signed_at }} UTC</p>{% else %}<p class="muted">No customer signature recorded.</p>{% endif %}</section>{% else %}{% include "ecr/customer_signature.html" %}<form method="post" action="/ecr/reports/{{ report.id }}/review" class="workflow-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" data-review-report>Review Report</button><span class="muted">Save current changes before reviewing. Final completeness is checked by the server.</span></form>{% endif %}
   {% if series_editable %}{% include "ecr/series_confirmation.html" %}{% endif %}
 </section>
 {% endblock %}

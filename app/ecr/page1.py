@@ -126,7 +126,7 @@ class Page1DraftInput(BaseModel):
         return self
 
 
-# One source for UI indicators and later completed-report validation (not yet implemented).
+# One source for UI indicators and centralized completed-report validation.
 FINAL_REQUIRED_FIELDS = frozenset(
     name
     for name, field in Page1DraftInput.model_fields.items()

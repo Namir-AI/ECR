@@ -121,9 +121,9 @@ class DraftCreateInput(BaseModel):
 
 class DraftAutosaveInput(BaseModel):
     erection_start_date: date | None = None
-    erection_completion_date: date
+    erection_completion_date: date | None = None
 
-    @field_validator("erection_start_date", mode="before")
+    @field_validator("erection_start_date", "erection_completion_date", mode="before")
     @classmethod
     def blank_start_date_is_none(cls, value: object) -> object:
         return None if value == "" else value

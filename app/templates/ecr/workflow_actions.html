@@ -1,0 +1,9 @@
+<div class="workflow-actions row-actions">
+{% if current_user.role.value == 'SUPERVISOR' %}
+  {% if report.status.value == 'DRAFT' %}<a class="button secondary" href="/ecr/reports/{{ report.id }}/edit">Continue / Edit</a><form method="post" action="/ecr/reports/{{ report.id }}/review"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button>Review Report</button></form>
+  {% elif report.status.value == 'REVIEWED' %}<form method="post" action="/ecr/reports/{{ report.id }}/back-to-edit"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="secondary">Back to Edit</button></form><button type="button" class="accent" data-confirm-action="/ecr/reports/{{ report.id }}/submit" data-confirm-title="Submit E&amp;C Report?" data-confirm-message="{{ report.display_identity }}. After submission you will no longer normally edit this report." data-confirm-label="Submit Report">Confirm &amp; Submit</button>{% endif %}
+{% else %}
+  {% if report.status.value != 'APPROVED' %}<a class="button secondary" href="/reports/{{ report.id }}/edit">Edit Report</a>{% endif %}
+  {% if report.status.value == 'SUBMITTED' %}<button type="button" class="accent" data-confirm-action="/reports/{{ report.id }}/approve" data-confirm-title="Approve this E&amp;C Report?" data-confirm-message="You are approving: {{ report.display_identity }}. The report will become the accepted E&amp;C record." data-confirm-label="Approve Report">Approve</button>{% endif %}
+{% endif %}
+</div>

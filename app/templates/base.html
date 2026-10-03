@@ -7,25 +7,30 @@
     <title>{% block title %}Paharpur ECR{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
     <script src="{{ url_for('static', path='/password_visibility.js') }}" defer></script>
+    <script src="{{ url_for('static', path='/app_shell.js') }}" defer></script>
   </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="/">Paharpur Service Management</a>
+  <body{% if current_user %} class="authenticated-shell"{% endif %}>
+    {% if current_user %}<header class="mobile-header"><a class="brand" href="/dashboard">Paharpur Service Management</a><button type="button" class="secondary" data-sidebar-toggle aria-expanded="false" aria-controls="app-sidebar" aria-label="Toggle navigation">{{ navigation_icon('menu') }}</button></header>{% endif %}
+    <header id="app-sidebar" class="{{ 'app-sidebar' if current_user else 'site-header' }}">
+      {% if current_user %}<a class="logo-link" href="/dashboard"><img class="paharpur-logo" src="{{ url_for('static', path='/brand/paharpur-logo.png') }}" alt="Paharpur"><span>Service Management</span></a>{% else %}<a class="brand" href="/">Paharpur Service Management</a>{% endif %}
       {% if current_user %}
         {% set current_path = request.url.path %}
         <nav class="primary-nav" aria-label="Primary navigation">
-          {% set dashboard_active = current_path == '/dashboard' or (current_user.role.value == 'SUPERVISOR' and current_path.startswith('/ecr/')) %}
+          {% set dashboard_active = current_path == '/dashboard' %}
           <a class="nav-item{% if dashboard_active %} is-active{% endif %}" href="/dashboard"{% if dashboard_active %} aria-current="page"{% endif %}>{{ navigation_icon("dashboard") }}<span>Dashboard</span></a>
+          <a class="nav-item{% if current_path.startswith('/ecr/') %} is-active{% endif %}" href="{{ '/ecr/reports/new' if current_user.role.value == 'SUPERVISOR' else '/reports' }}"{% if current_path.startswith('/ecr/') %} aria-current="page"{% endif %}>{{ navigation_icon('report-add') }}<span>Erection &amp; Commissioning</span></a>
+          <a class="nav-item{% if current_path.startswith('/reports') %} is-active{% endif %}" href="{{ '/dashboard' if current_user.role.value == 'SUPERVISOR' else '/reports' }}"{% if current_path.startswith('/reports') %} aria-current="page"{% endif %}>{{ navigation_icon('reports') }}<span>Reports</span></a>
+          <span class="nav-item coming-soon" role="link" tabindex="0" aria-disabled="true" title="Budget — coming soon">{{ navigation_icon('budget') }}<span>Budget <small>Coming soon</small></span></span>
+          <span class="nav-item coming-soon" role="link" tabindex="0" aria-disabled="true" title="Bills — coming soon">{{ navigation_icon('bills') }}<span>Bills <small>Coming soon</small></span></span>
           {% if current_user.role.value == 'SUPERADMIN' %}
-            <a class="nav-item{% if current_path.startswith('/reports') %} is-active{% endif %}" href="/reports"{% if current_path.startswith('/reports') %} aria-current="page"{% endif %}>{{ navigation_icon("reports") }}<span>Reports</span></a>
-            <a class="nav-item{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>User Management</span></a>
+            <p class="nav-group-label">Master Data</p>
             <a class="nav-item{% if current_path.startswith('/admin/branches') %} is-active{% endif %}" href="/admin/branches"{% if current_path.startswith('/admin/branches') %} aria-current="page"{% endif %}>{{ navigation_icon("branches") }}<span>Branch Management</span></a>
+            <p class="nav-group-label">Users &amp; Access</p><a class="nav-item{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') and current_path != '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>User Management</span></a>
             <a class="nav-item{% if current_path == '/admin/users/create-branch-admin' %} is-active{% endif %}" href="/admin/users/create-branch-admin"{% if current_path == '/admin/users/create-branch-admin' %} aria-current="page"{% endif %}>{{ navigation_icon("user-add") }}<span>Create Branch Admin</span></a>
           {% elif current_user.role.value == 'BRANCH_ADMIN' %}
-            <a class="nav-item{% if current_path.startswith('/reports') %} is-active{% endif %}" href="/reports"{% if current_path.startswith('/reports') %} aria-current="page"{% endif %}>{{ navigation_icon("reports") }}<span>Reports</span></a>
-            <a class="nav-item{% if current_path.startswith('/admin/users') %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>Supervisor Management</span></a>
+            <p class="nav-group-label">Users &amp; Access</p><a class="nav-item{% if current_path.startswith('/admin/users') %} is-active{% endif %}" href="/admin/users"{% if current_path.startswith('/admin/users') %} aria-current="page"{% endif %}>{{ navigation_icon("users") }}<span>Supervisor Management</span></a>
           {% endif %}
-          <a class="nav-item{% if current_path == '/auth/change-password' %} is-active{% endif %}" href="/auth/change-password"{% if current_path == '/auth/change-password' %} aria-current="page"{% endif %}>{{ navigation_icon("password") }}<span>Change Password</span></a>
+          <p class="nav-group-label">Settings</p><a class="nav-item{% if current_path == '/auth/change-password' %} is-active{% endif %}" href="/auth/change-password"{% if current_path == '/auth/change-password' %} aria-current="page"{% endif %}>{{ navigation_icon("password") }}<span>Change Password</span></a>
           <form method="post" action="/auth/logout" class="nav-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="nav-item nav-logout">{{ navigation_icon("logout") }}<span>Logout</span></button>
@@ -33,11 +38,11 @@
         </nav>
       {% endif %}
     </header>
-    <main class="page-shell">
+    <div class="app-content"><main class="page-shell">
       {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
       {% if message %}<div class="alert alert-success" role="status">{{ message }}</div>{% endif %}
       {% block content %}{% endblock %}
-    </main>
+    </main><footer class="app-footer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-2-15-4 18"/></svg><em>Developed by: Nazmul Khan</em></footer></div>
     {% block scripts %}{% endblock %}
   </body>
 </html>
