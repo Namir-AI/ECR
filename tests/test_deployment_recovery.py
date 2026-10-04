@@ -15,8 +15,17 @@ import sys
 import tarfile
 
 import pytest
+from dotenv import dotenv_values
 
-from tests.test_deployment import COMMON, PRIVILEGE_STUBS, ROOT, Q, bash, executable
+from tests.test_deployment import (
+    COMMON,
+    PRIVILEGE_STUBS,
+    ROOT,
+    Q,
+    bash,
+    executable,
+    seed_active_runtime,
+)
 from tests.test_deployment import (
     deployment as deployment,  # noqa: PLC0414 - pytest fixture re-export
 )
@@ -122,7 +131,7 @@ def test_atomic_publication_rejects_symlinks(tmp_path, field):
     assert original.read_bytes() == b"do not touch"
 
 
-@pytest.mark.parametrize("mode", ["fresh", "reconfigure"])
+@pytest.mark.parametrize("mode", ["fresh", "reconfigure", "repair"])
 @pytest.mark.parametrize(
     "failure", ["db", "migration", "local", "https-setup", "https", "none"]
 )
@@ -133,16 +142,25 @@ def test_installer_launcher_is_last_and_requires_health(tmp_path, mode, failure)
         .split('upgrade_production_env "$release_dir"', 1)[1]
     )
     events = tmp_path / "events"
+    deployed = "f" * 40
+    prior = "a" * 40 if mode == "reconfigure" else ""
+    prior_ref = "prior-tag" if prior else ""
+    (tmp_path / "state").mkdir()
     result = bash(f"""
 source {Q(str(COMMON))}
+{PRIVILEGE_STUBS}
 release_dir={Q(str(tmp_path))}; ECR_DB_TYPE=external; INSTALL_MODE={mode}
 ECR_SERVICE_NAME=ecr; ECR_HTTPS_ENABLED=true; ECR_DOMAIN=example.invalid
-CREATE_INITIAL_ADMIN=false; deploy_commit=target; ECR_GIT_REF=release; previous_release=old
+CREATE_INITIAL_ADMIN=false; deploy_commit={deployed}; ECR_GIT_REF=release
+previous_commit={Q(prior)}; previous_ref={Q(prior_ref)}; ECR_SERVICE_USER=ecr
 ECR_INSTALL_DIR={Q(str(tmp_path))}
 run_db_check() {{ echo db >>{Q(str(events))}; {"return 50" if failure == "db" else ":"}; }}
 run_migrations() {{ echo migrate >>{Q(str(events))}; {"return 50" if failure == "migration" else ":"}; }}
 activate_release() {{ echo activate >>{Q(str(events))}; }}
-write_deployment_state() {{ :; }}; append_deployment_history() {{ :; }}
+original_state=$(declare -f write_deployment_state)
+eval "${{original_state/write_deployment_state/real_write_deployment_state}}"
+write_deployment_state() {{ echo state >>{Q(str(events))}; real_write_deployment_state "$@"; }}
+append_deployment_history() {{ echo history >>{Q(str(events))}; }}
 render_systemd_service() {{ :; }}; render_nginx_site() {{ :; }}
 systemctl() {{ :; }}
 wait_for_local_health() {{ echo local >>{Q(str(events))}; {"return 50" if failure == "local" else ":"}; }}
@@ -156,18 +174,56 @@ git_as_deployer() {{ echo exact-target; }}
     sequence = events.read_text().splitlines()
     if failure == "none":
         assert result.returncode == 0, result.stderr
-        assert sequence == [
-            "db",
-            "migrate",
-            "activate",
-            "local",
-            "tls-config",
-            "https",
-            "launcher",
-        ]
+        assert sequence == (
+            ["db", "migrate"]
+            + ([] if mode == "repair" else ["activate"])
+            + ["local", "tls-config", "https"]
+            + ([] if mode == "repair" else ["state", "history"])
+            + ["launcher"]
+        )
+        if mode != "repair":
+            values = dotenv_values(tmp_path / "state/deployment.env")
+            assert values["ECR_CURRENT_COMMIT"] == deployed
+            assert values["ECR_PREVIOUS_COMMIT"] == prior
+            assert values["ECR_PREVIOUS_REF"] == prior_ref
+            assert "ECR_PREVIOUS_RELEASE" not in values
     else:
         assert result.returncode != 0
         assert "launcher" not in sequence
+        assert "state" not in sequence and "history" not in sequence
+        assert not (tmp_path / "state/deployment.env").exists()
+
+
+def test_reconfiguration_captures_actual_previous_head_not_directory_metadata(
+    deployment, tmp_path
+):
+    base, _source, _config, old, target = deployment
+    active = seed_active_runtime(base)
+    state = base / "state/deployment.env"
+    metadata = f"ECR_CURRENT_COMMIT={target}\nECR_CURRENT_REF=descriptive-tag\nECR_PREVIOUS_RELEASE={active}\n"
+    state.write_text(metadata)
+    executable(active / "install/backup.sh", "exit 0\n")
+    body = (
+        (ROOT / "install/install.sh")
+        .read_text()
+        .split('previous_commit=""\nprevious_ref=""\n', 1)[1]
+        .split('upgrade_production_env "$release_dir"', 1)[0]
+    )
+    result = bash(f"""
+source {Q(str(COMMON))}
+{PRIVILEGE_STUBS}
+ECR_INSTALL_DIR={Q(str(base))}; ECR_GIT_REF=main; INSTALL_MODE=reconfigure
+previous_commit=""; previous_ref=""
+ensure_repository() {{ :; }}; fetch_repository() {{ :; }}
+prepare_release() {{ printf '%s' {Q(str(active))}; }}
+write_production_env() {{ :; }}; link_release_env() {{ :; }}
+{body}
+printf '%s\\n' "$previous_commit" "$previous_ref"
+""")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [old, "descriptive-tag"]
+    assert state.read_text() == metadata
+    assert (base / "current").resolve() == active
 
 
 def digest(path):
@@ -298,11 +354,47 @@ def test_restore_database_and_corresponding_persistent_files(
     recovery, tmp_path, custom
 ):
     case = recovery
+    application = (case["base"] / "current").resolve()
+    current_head = subprocess.check_output(
+        ["git", "-C", str(application), "rev-parse", "HEAD"], text=True
+    ).strip()
+    state = case["base"] / "state/deployment.env"
+    state.write_text(
+        f"ECR_CURRENT_COMMIT={current_head}\nECR_CURRENT_REF=current-tag\nECR_PREVIOUS_COMMIT=\nECR_PREVIOUS_REF=\n"
+    )
+    # State/code are separate from database+files recovery. Catch accidental
+    # checkout, venv sync, migration or deployment-state updates explicitly.
+    common = case["tooling"] / "lib/common.sh"
+    with common.open("a") as stream:
+        stream.write(f"""
+run_migrations() {{ echo forbidden-migration >>{Q(str(case["events"]))}; return 95; }}
+checkout_application_commit() {{ echo forbidden-checkout >>{Q(str(case["events"]))}; return 95; }}
+sync_application_dependencies() {{ echo forbidden-sync >>{Q(str(case["events"]))}; return 95; }}
+activate_release() {{ echo forbidden-activation >>{Q(str(case["events"]))}; return 95; }}
+write_deployment_state() {{ echo forbidden-state >>{Q(str(case["events"]))}; return 95; }}
+""")
+    unchanged = [
+        state,
+        application / "app/main.py",
+        application / ".venv/bin/python",
+        case["base"] / "shared/.env",
+    ]
     if custom:
         storage, _ = custom_storage(case, tmp_path)
+    before = {path: path.read_bytes() for path in unchanged}
     result = restore(case)
     assert result.returncode == 0, result.stderr
     assert "never-log-this-secret" not in result.stdout + result.stderr
+    assert "Application code and Alembic are NOT rolled back" in result.stdout
+    assert (case["base"] / "current").resolve() == application
+    assert (
+        subprocess.check_output(
+            ["git", "-C", str(application), "rev-parse", "HEAD"], text=True
+        ).strip()
+        == current_head
+    )
+    for path, contents in before.items():
+        assert path.read_bytes() == contents
     assert case["captured"].read_bytes() == gzip.decompress(case["sql"].read_bytes())
     assert (
         case["data"] / "protected/signature.png"

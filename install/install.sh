@@ -708,7 +708,8 @@ ensure_install_layout
 configure_deploy_key
 write_deployment_config
 
-previous_release=""
+previous_commit=""
+previous_ref=""
 if [[ "$INSTALL_MODE" == "repair" ]]; then
     ensure_repository
     release_dir=$(valid_current_release_path)
@@ -716,6 +717,10 @@ if [[ "$INSTALL_MODE" == "repair" ]]; then
 else
     if [[ "$INSTALL_MODE" == "reconfigure" ]]; then
         previous_release=$(current_release_path)
+        previous_commit=$(git_as_deployer -C "$previous_release" rev-parse HEAD) || \
+            die "Cannot verify the pre-reconfiguration application commit."
+        load_deployment_state || true
+        previous_ref=${ECR_CURRENT_REF:-unknown}
         log "Creating pre-reconfiguration database backup."
         "$previous_release/install/backup.sh" >/dev/null
     fi
@@ -753,8 +758,6 @@ run_migrations "$release_dir"
 
 if [[ "$INSTALL_MODE" != "repair" ]]; then
     activate_release "$release_dir"
-    write_deployment_state "$deploy_commit" "$ECR_GIT_REF" "$previous_release"
-    append_deployment_history "$INSTALL_MODE" "$ECR_GIT_REF" "$deploy_commit" "$release_dir"
 fi
 
 render_systemd_service "$release_dir"
@@ -784,6 +787,10 @@ fi
 if [[ "$ssl_failed" == "true" ]]; then
     warn "Deployment is running over HTTP, but HTTPS setup failed and requires administrator action."
     exit 1
+fi
+if [[ "$INSTALL_MODE" != "repair" ]]; then
+    write_deployment_state "$deploy_commit" "$ECR_GIT_REF" "$previous_commit" "$previous_ref"
+    append_deployment_history "$INSTALL_MODE" "$ECR_GIT_REF" "$deploy_commit" "$release_dir"
 fi
 install_update_launcher "$release_dir"
 deployed_commit=$(git_as_deployer -C "$release_dir" rev-parse HEAD)

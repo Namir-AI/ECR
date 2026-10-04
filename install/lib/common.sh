@@ -304,7 +304,9 @@ cleanup_failed_release() {
     release_root=$(readlink -f -- "$ECR_INSTALL_DIR/releases") || return 1
     resolved=$(readlink -f -- "$release_dir") || return 1
     current=$(current_release_path || true)
-    # Only a direct child of releases, never the active/previous release or a symlink.
+    # First-install/reconfiguration cleanup only, not normal in-place updates.
+    # Legacy previous-directory metadata is an exclusion guard, never a rollback
+    # target or proof of an immutable code version. Always protect current.
     [[ ! -L "$release_dir" && ${resolved%/*} == "$release_root" && \
         "$resolved" != "$current" && "$resolved" != "${ECR_PREVIOUS_RELEASE:-}" ]] || {
         warn "Refusing unsafe failed-release cleanup."
@@ -361,8 +363,12 @@ prepare_release() (
 )
 
 upgrade_production_env() {
-    local release_dir=$1 storage_root helper
+    local release_dir=$1 storage_root helper service_helper
     helper=$(deployment_env_helper "$release_dir")
+    # Root may use target-bootstrap tools, but the service cannot traverse the
+    # private bootstrap. Validate with the checked-out application's helper.
+    service_helper="$release_dir/install/lib/env_tools.py"
+    [[ -f "$service_helper" && ! -L "$service_helper" ]] || die "Application environment validator is unavailable."
     "$release_dir/.venv/bin/python" "$helper" upgrade \
         "$ECR_INSTALL_DIR/shared/.env" "$release_dir/.env.example" "$ECR_INSTALL_DIR"
     storage_root=$("$release_dir/.venv/bin/python" "$helper" storage \
@@ -376,7 +382,36 @@ upgrade_production_env() {
     chown root:"$ECR_SERVICE_USER" "$ECR_INSTALL_DIR/shared/.env"
     chmod 0640 "$ECR_INSTALL_DIR/shared/.env"
     (cd "$release_dir" && run_as_service env PYTHONPATH="$release_dir" "$release_dir/.venv/bin/python" \
-        "$helper" validate "$ECR_INSTALL_DIR/shared/.env")
+        "$service_helper" validate "$ECR_INSTALL_DIR/shared/.env")
+}
+
+checkout_application_commit() (
+    # In-place checkout and uv construction must not inherit bootstrap 0077.
+    set -Eeuo pipefail
+    umask 0022
+    local application_dir=$1 commit=$2
+    git_as_deployer -C "$application_dir" checkout --detach --no-overwrite-ignore "$commit" || exit "$?"
+    local checked_out
+    checked_out=$(git_as_deployer -C "$application_dir" rev-parse HEAD) || exit "$?"
+    [[ "$checked_out" == "$commit" ]] || die "Application checkout did not reach the exact target commit."
+)
+
+sync_application_dependencies() (
+    set -Eeuo pipefail
+    umask 0022
+    sync_release_dependencies "$1"
+)
+
+verify_application_target() {
+    local application_dir=$1 commit=$2 required_file entry protected_paths
+    # Never let checkout overwrite the protected env link or retained venv.
+    protected_paths=$(git_as_deployer -C "$application_dir" ls-tree "$commit" -- .env .venv) || return "$?"
+    [[ -z "$protected_paths" ]] || die "Target commit tracks protected .env or .venv paths."
+    for required_file in pyproject.toml uv.lock .env.example app/main.py alembic.ini \
+        install/update.sh install/status.sh install/lib/env_tools.py install/ecr-update.sh; do
+        entry=$(git_as_deployer -C "$application_dir" ls-tree "$commit" -- "$required_file") || return "$?"
+        [[ "$entry" == 100644\ blob\ * || "$entry" == 100755\ blob\ * ]] || die "Target lacks a regular required application/deployment file: $required_file"
+    done
 }
 
 atomic_install_file() (
@@ -460,14 +495,19 @@ wait_for_local_health() {
 write_deployment_state() {
     local current_commit=$1
     local current_ref=$2
-    local previous_release=${3:-}
+    local previous_commit=${3:-}
+    local previous_ref=${4:-}
+    [[ "$current_commit" =~ ^[0-9a-f]{40}$ ]] || die "Deployment state requires an exact current Git SHA."
+    [[ -z "$previous_commit" || "$previous_commit" =~ ^[0-9a-f]{40}$ ]] || die "Deployment state requires an exact previous Git SHA, not a release directory."
+    [[ -n "$previous_commit" || -z "$previous_ref" ]] || die "Previous ref requires a previous commit."
     local state_file="$ECR_INSTALL_DIR/state/deployment.env"
     local temporary_file
     temporary_file=$(mktemp "$ECR_INSTALL_DIR/state/deployment.env.XXXXXX")
     {
         printf 'ECR_CURRENT_COMMIT=%q\n' "$current_commit"
         printf 'ECR_CURRENT_REF=%q\n' "$current_ref"
-        printf 'ECR_PREVIOUS_RELEASE=%q\n' "$previous_release"
+        printf 'ECR_PREVIOUS_COMMIT=%q\n' "$previous_commit"
+        printf 'ECR_PREVIOUS_REF=%q\n' "$previous_ref"
         printf 'ECR_DEPLOYED_AT=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     } >"$temporary_file"
     chown root:"$ECR_SERVICE_USER" "$temporary_file"
@@ -479,10 +519,12 @@ append_deployment_history() {
     local action=$1
     local ref=$2
     local commit=$3
-    local release_dir=$4
+    # Keep the existing TSV format. The SHA identifies code; the path is only
+    # an application location and is not an immutable previous-version snapshot.
+    local application_path=$4
     local history_file="$ECR_INSTALL_DIR/state/deployment-history.tsv"
     printf '%s\t%s\t%s\t%s\t%s\n' \
-        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$action" "$ref" "$commit" "$release_dir" \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$action" "$ref" "$commit" "$application_path" \
         >>"$history_file"
     chown root:"$ECR_SERVICE_USER" "$history_file"
     chmod 0640 "$history_file"

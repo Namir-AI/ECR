@@ -71,6 +71,24 @@ launcher_main() (
     commit=$(launcher_git --git-dir="$repository" rev-parse --verify "$requested_ref^{commit}") || \
         launcher_die "Requested Git ref was not found."
     [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || launcher_die "Unable to resolve an exact commit."
+    if [[ "$install_only" != true ]]; then
+        # Check BEFORE running target-version tooling: an older/divergent
+        # commit could contain an updater that predates the forward-only rule.
+        local application_dir active_commit ancestry_status
+        [[ -L "$ECR_INSTALL_DIR/current" ]] || launcher_die "Current application link is unavailable."
+        application_dir=$(readlink -f -- "$ECR_INSTALL_DIR/current") || launcher_die "Cannot resolve the active application."
+        active_commit=$(launcher_git -C "$application_dir" rev-parse --verify 'HEAD^{commit}') || launcher_die "Cannot verify the active application commit."
+        [[ "$active_commit" =~ ^[0-9a-f]{40}$ ]] || launcher_die "Invalid active application commit."
+        if [[ "$active_commit" != "$commit" ]]; then
+            if launcher_git --git-dir="$repository" merge-base --is-ancestor "$active_commit" "$commit"; then
+                :
+            else
+                ancestry_status=$?
+                (( ancestry_status != 1 )) || launcher_die "Normal ECR updates are forward-only. Older or divergent commits are rejected; rollback/recovery requires reviewed operator recovery."
+                launcher_die "Cannot verify forward-only Git ancestry (exit $ancestry_status); update cancelled without application changes. Reviewed operator recovery is required."
+            fi
+        fi
+    fi
     bootstrap_dir=$(mktemp -d /run/ecr-update.XXXXXXXX)
     # Only this exact root-private mktemp directory is disposable.
     trap 'code=$?; if [[ -n "$bootstrap_dir" ]]; then

@@ -10,8 +10,8 @@ The default installation uses:
 
 ```text
 /opt/ecr/
-├── current -> releases/<timestamp>-<commit>/
-├── releases/                 immutable application releases and virtualenvs
+├── current -> releases/<initial-install-directory>/
+├── releases/                 initial/reconfigured worktrees and their virtualenvs
 ├── repository.git/           deployment-only Git mirror
 ├── shared/
 │   ├── .env                  protected production configuration
@@ -20,13 +20,18 @@ The default installation uses:
 │   ├── uv-cache/             shared uv package/download cache
 │   └── uv-python/            uv-managed CPython 3.12 runtime
 ├── backups/                  protected SQL and persistent-data backups
-└── state/                    deployment history and rollback metadata
+└── state/                    deployed/previous commits, history, env snapshots
 ```
 
 Root owns deployment code, metadata, the Git mirror, and `.env`. The dedicated
 `ecr` runtime account can read the current release and configuration, but can
 write only under the designated shared runtime directories. The application is
 served by Uvicorn on `127.0.0.1:8000`; Nginx is the only public HTTP server.
+Normal updates reuse the active worktree and its `.venv`; its old timestamp/SHA
+directory name is **legacy storage identity only**, not the running code version
+or an immutable snapshot. Actual Git HEAD is authoritative. `current` is unchanged;
+there is no directory renaming or migration of the existing AWS layout.
+Only initial installation/reconfiguration creates an isolated worktree.
 The installer also installs the root-owned `/usr/local/sbin/ecr-update`
 launcher. Normal company operation needs no knowledge of release directories.
 It is atomically installed/refreshed only after the exact deployed release
@@ -231,6 +236,15 @@ sudo ecr-update
 ```
 
 Exact commits remain supported. Prefer approved immutable tags/full SHAs.
+**Normal updates are forward-only:** the active Git HEAD must be an ancestor of
+the target. A direct/later descendant is allowed; the same SHA uses reconciliation.
+Older and divergent commits are rejected before backup, service stop, checkout,
+dependency/config changes or migrations. There is no downgrade/force bypass.
+The tiny launcher checks ancestry before executing target tooling (including old
+updaters), and `update.sh` checks again while the current service is healthy.
+Unknown/unverifiable ancestry fails closed for operator review. Initial install
+and reviewed reconfiguration are separate; pre-migration recovery can still
+restore the verified old SHA after a failed forward update.
 The small stable launcher requires root, reads the protected deployment config,
 holds the deployment lock, fetches the configured mirror, and resolves an exact
 SHA. It extracts **that commit's** deployment scripts into a root-private
@@ -238,14 +252,27 @@ temporary directory and executes them, handing off the same lock. It never
 sources the current release's helpers. A bootstrap failure changes neither the
 current release nor the database. Deployment state/history records the exact SHA.
 
-The target updater creates a mandatory database/files backup, prepares a
-separate `uv.lock` release with `uv sync --frozen --no-dev`, checks database
-connectivity, runs Alembic, atomically switches `current`, restarts systemd,
-and verifies local and configured HTTPS health. uv remains the runtime and
-package manager: CPython 3.12 lives under `shared/uv-python`, and each release
-has its own virtualenv. Interpreter containment is checked against canonical
-paths, including when uv returns a release-venv symlink. No manual production
-Python setup is needed.
+The target updater verifies the active Git worktree, protected `.env` link,
+persistent storage location, systemd status, and local/configured HTTPS health.
+It refuses local Git changes rather than overwriting operator edits. It creates
+the mandatory database/persistent-files backup and a root-only environment
+snapshot **before stopping ECR**. While stopped, it fetches the repository,
+checks out the pinned exact commit in the **same application worktree**, runs
+`uv sync --frozen --no-dev`, upgrades/validates production config, checks DB
+connectivity and runs Alembic as the service user. It starts ECR and verifies
+local and configured HTTPS health before recording a successful deployment.
+Allow a maintenance window: frozen dependency sync and migrations cause
+downtime. There is no new release directory or `current` symlink switch per update.
+The active linked worktree and deployment mirror share one Git object database;
+fetching the mirror makes target commits available without a redundant self-fetch.
+
+uv remains the runtime/package manager; canonical, protected uv-managed
+CPython 3.12 lives under `shared/uv-python`. The active worktree retains its
+own `.venv`. Application checkout/dependency construction uses a scoped `0022`
+umask, while launcher/bootstrap secrets remain `0077`/`0700`. Service-user
+commands use application-directory executables/helpers, **never** the private
+`/run/ecr-update.*` bootstrap. No manual production Python setup is needed.
+Run updates via `ecr-update`, not an updater inside the worktree being changed.
 
 The active `current` Git worktree is authoritative, not a potentially stale
 commit in `deployment.env`. Stale metadata produces a warning and is reconciled
@@ -262,13 +289,18 @@ state/ref, records a `reconcile` history event, refreshes the launcher from the
 exact current release, and reports status, without a backup, migration, restart
 or duplicate release.
 
-Before migrations, failures leave the old release/symlink/database unchanged,
-remove only the failed new Git worktree, and restore the pre-update `.env` if
-configuration preparation had begun. Failed cleanup is a warning, not permission
-to remove other releases or shared data. Once migrations begin there is **no
-automatic Alembic downgrade**: retain the failed release and use the named
-database backup/environment snapshot for reviewed recovery. A post-activation
-health failure also needs operator review; code/schema are not blindly reverted.
+Preflight/backup failures do not stop or mutate the application. Failures after
+stopping ECR but **before migrations** attempt to restore the previous exact
+commit, environment and frozen dependencies, check DB connectivity, start ECR
+and verify health. Failed recovery leaves ECR stopped and reports the old SHA,
+backup and environment snapshot for operator recovery. No force checkout or
+ignored-file overwrite is used. The `current` symlink remains unchanged.
+Once migrations begin there is **no automatic Git rollback or Alembic downgrade**:
+a migration/start/health failure leaves ECR stopped, retains the target worktree
+and named database/files backup/environment snapshot, and requires operator
+schema-compatibility review before restoring code/data. A failed update is never
+reported as successful. After health passes, metadata/launcher maintenance
+failures are distinguished from application failures and do not stop healthy ECR.
 Environment recovery restores exact contents atomically with live permissions
 `root:<service user> 0640`; the retained snapshot stays `root:root 0600`.
 
@@ -399,25 +431,47 @@ no recovery mutation is attempted and the previously active service is restarted
 Match application code/schema to backup metadata before recovery. Retained
 previous directories are reviewed/removed separately by company policy.
 
-## L. Application rollback
+## L. Reviewed application recovery
 
-Roll back to the previously recorded release:
+Normal updates no longer retain a separate previous-release directory.
+Successful state records `ECR_CURRENT_COMMIT`/`ECR_CURRENT_REF` and
+`ECR_PREVIOUS_COMMIT`/`ECR_PREVIOUS_REF`; refs are descriptive labels and SHAs
+identify the code. An initial install has no previous commit/ref. Reconfiguration
+also records the actual prior Git HEAD and its descriptive ref. Same-commit
+reconciliation preserves previous commit/ref when recorded. Legacy directory-only
+state is readable, but its `ECR_PREVIOUS_RELEASE` is not a rollback target and is
+not carried into newly written state; we never infer a commit from a directory name.
+Backup metadata records the exact pre-migration commit. Do not treat the mutable
+worktree's directory name as an old-code snapshot. After a migration failure, assess schema compatibility
+first: restoring only code or rerunning an old migration can be unsafe. Use
+the verified DB/files restore procedure if reviewed recovery requires reverting
+persistent data, and restore/sync the matching code and protected env snapshot
+while ECR is stopped. No automated database downgrade is provided.
 
-```bash
-cd /opt/ecr/current
-sudo ./install/rollback.sh
-```
+**`rollback.sh` is disabled**, including invocations with a directory or commit.
+It exits non-zero with recovery guidance and does not read/source deployment
+configuration, switch `current`, check out Git, synchronize dependencies, stop
+the service, or change database/files/state/history. Older application code may
+not support the current migrated schema; health alone cannot certify that
+compatibility. `ecr-update <older-ref>` is rejected, not a rollback substitute:
+the normal updater is forward-only and never performs a database downgrade.
 
-Or name a retained directory under `/opt/ecr/releases`:
+For an operator-reviewed recovery, first verify the exact intended code SHA and
+assess the schema against it. Before changing code or dependencies, create the
+mandatory verified DB/persistent-files safety backup and preserve the protected
+`.env`. While stopped, restore the reviewed code and its frozen dependencies
+using protected CPython 3.12/uv; if necessary use the separate confirmed
+`restore.sh` procedure for matching database/files. Verify production config,
+service-user DB connectivity, and local/configured HTTPS health before recording
+successful recovery. If any step fails, leave ECR stopped and retain the safety
+backup; never guess a schema downgrade. This manual reviewed operation is not
+implemented by the disabled command. Pre-migration automatic recovery inside
+`update.sh` remains supported, because migrations have not started in that case.
 
-```bash
-sudo ./install/rollback.sh 20260929T120000Z-abc123def456
-```
-
-Rollback changes application code only, restarts ECR, and performs a health
-check. If that check fails it restores the prior code symlink. It never runs an
-automatic Alembic downgrade. Use the verified database restore procedure when
-the schema also must be reverted.
+Deployment history remains the existing append-only five-column TSV:
+UTC timestamp, action, requested/descriptive ref, exact SHA, application path.
+The final path column is a locator only and may repeat for different commits;
+historical entries are not rewritten or interpreted as immutable code snapshots.
 
 ## M. Status and diagnostics
 
