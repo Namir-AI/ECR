@@ -21,7 +21,12 @@ from app.core.templates import render_template
 from app.core.time import utc_now
 from app.ecr import batch_c, page1, page2, page3
 from app.ecr.models import EcrReportStatus
-from app.ecr.operations import grouped_reports, visible_reports
+from app.ecr.operations import (
+    dashboard_filter_number,
+    erector_context,
+    grouped_reports,
+    visible_reports,
+)
 from app.ecr.page1 import (
     FINAL_REQUIRED_FIELDS,
     SECTIONS,
@@ -551,16 +556,16 @@ def signature_read(
 ):
     report = _visible_signature_report(db, report_id, user)
     if not report.page3 or not report.page3.customer_signature_storage_key:
-        raise HTTPException(status_code=404, detail="No customer signature recorded")
+        raise HTTPException(status_code=404, detail="No Customer Sign recorded")
     try:
         content = get_protected_storage(request).read(
             report.page3.customer_signature_storage_key
         )
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Signature unavailable") from None
+        raise HTTPException(status_code=404, detail="Customer Sign unavailable") from None
     except (OSError, ValueError):
         raise HTTPException(
-            status_code=503, detail="Signature temporarily unavailable"
+            status_code=503, detail="Customer Sign temporarily unavailable"
         ) from None
     return Response(
         content,
@@ -597,14 +602,14 @@ async def signature_save(
     ):
         raise HTTPException(
             status_code=415,
-            detail="Use the signature pad; file uploads are not supported.",
+            detail="Use the Customer Sign pad; file uploads are not supported.",
         )
     body = bytearray()
     async for chunk in request.stream():
         body.extend(chunk)
         if len(body) > page3.JSON_LIMIT:
             raise HTTPException(
-                status_code=413, detail="Signature drawing is too large."
+                status_code=413, detail="Customer Sign is too large."
             )
     try:
         data = page3.SignatureInput.model_validate(json.loads(body))
@@ -629,7 +634,7 @@ async def signature_save(
         # object here. It may be referenced by a committed row. Safe orphans can
         # be reconciled later; existing signed data is never destroyed on failure.
         return JSONResponse(
-            {"ok": False, "message": "Unable to save signature. Please retry."},
+            {"ok": False, "message": "Unable to save sign. Please retry."},
             status_code=503,
         )
     _remove_old_signature(store, old_key)
@@ -658,7 +663,7 @@ def signature_clear(
     except (OSError, SQLAlchemyError):
         db.rollback()
         return JSONResponse(
-            {"ok": False, "message": "Unable to clear signature. Please retry."},
+            {"ok": False, "message": "Unable to remove sign. Please retry."},
             status_code=503,
         )
     _remove_old_signature(store, old_key)
@@ -673,14 +678,27 @@ def admin_report_list(
     request: Request,
     db: DatabaseSession,
     admin: ManagementAdmin,
-    branch_id: int | None = Query(default=None),
+    branch_id: str = Query(default=""),
     status_filter: str = Query(default=""),
+    erector: str = Query(default=""),
+    year: str = Query(default=""),
 ) -> Response:
+    try:
+        branch_id = dashboard_filter_number(branch_id)
+        year = dashboard_filter_number(year, maximum=9999)
+    except EcrIdentityError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    erector = erector.strip()
     selected_branch = branch_id if admin.role is UserRole.SUPERADMIN else None
     if status_filter and status_filter not in {s.value for s in EcrReportStatus}:
         raise HTTPException(422, "Select a valid report status.")
     reports = visible_reports(
-        db, admin, branch_id=selected_branch, status=status_filter
+        db,
+        admin,
+        branch_id=selected_branch,
+        status=status_filter,
+        erector=erector,
+        year=year,
     )
     return render_template(
         request,
@@ -692,6 +710,14 @@ def admin_report_list(
             "status_filter": status_filter,
             "branches": list_branches(db) if admin.role is UserRole.SUPERADMIN else [],
             "selected_branch_id": selected_branch,
+            **erector_context(
+                db,
+                admin,
+                status=status_filter,
+                branch_id=selected_branch,
+                erector=erector,
+                year=year,
+            ),
         },
     )
 

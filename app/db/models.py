@@ -3,6 +3,11 @@
 from app.audit.models import ReportAuditEvent
 from app.auth.models import UserSession
 from app.branches.models import Branch
+from app.ecr.attachment_models import (
+    EcrJccDocument,
+    EcrPackageAttachment,
+    EcrPackageAuditEvent,
+)
 from app.ecr.models import (
     EcrFanBladeSerial,
     EcrFastenerTorqueRow,
@@ -19,7 +24,10 @@ __all__ = [
     "Branch",
     "EcrFanBladeSerial",
     "EcrFastenerTorqueRow",
+    "EcrJccDocument",
     "EcrPackage",
+    "EcrPackageAttachment",
+    "EcrPackageAuditEvent",
     "EcrPage1Technical",
     "EcrPage2Technical",
     "EcrPage3",

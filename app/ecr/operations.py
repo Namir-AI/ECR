@@ -1,8 +1,9 @@
 """Scoped grouped navigation, blank Cell creation and exact serial search."""
 
 from collections import OrderedDict
+from datetime import date
 
-from sqlalchemy import or_, select
+from sqlalchemy import extract, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.ecr.models import (
@@ -14,7 +15,7 @@ from app.ecr.models import (
 )
 from app.ecr.schemas import normalized_serial_key
 from app.ecr.services import EcrIdentityError, ExistingReportError, _report_load_options
-from app.users.models import UserRole
+from app.users.models import User, UserRole
 
 
 def scope(statement, user):
@@ -25,20 +26,99 @@ def scope(statement, user):
     return statement
 
 
-def visible_reports(db, user, *, status=None, branch_id=None):
-    # Dashboard needs identity only, not all technical child records/signature data.
-    query = scope(select(EcrReport), user).options(
-        joinedload(EcrReport.tower).joinedload(EcrTower.package),
-        joinedload(EcrReport.branch),
-        joinedload(EcrReport.supervisor),
-    )
+def dashboard_filter_number(value, *, maximum=2**63 - 1):
+    if value in (None, ""):
+        return None
+    try:
+        number = int(value)
+    except (ValueError, TypeError) as exc:
+        raise EcrIdentityError("Select a valid dashboard filter.") from exc
+    if not 1 <= number <= maximum:
+        raise EcrIdentityError("Select a valid dashboard filter.")
+    return number
+
+
+def dashboard_query(user, *, status=None, branch_id=None, erector="", year=None):
+    query = scope(select(EcrReport), user)
     if status:
         query = query.where(EcrReport.status == status)
     if branch_id and user.role is UserRole.SUPERADMIN:
         query = query.where(EcrReport.branch_id == branch_id)
+    if erector:
+        query = query.join(User, User.id == EcrReport.supervisor_user_id).where(
+            User.full_name.icontains(erector, autoescape=True)
+        )
+    if year is not None:
+        query = query.where(EcrReport.erection_completion_date >= date(year, 1, 1))
+        query = query.where(
+            EcrReport.erection_completion_date < date(year + 1, 1, 1)
+            if year < 9999
+            else EcrReport.erection_completion_date <= date.max
+        )
+    return query
+
+
+def visible_reports(db, user, *, status=None, branch_id=None, erector="", year=None):
+    # Identity only, eagerly loaded; no technical children/signature binaries.
+    query = dashboard_query(
+        user, status=status, branch_id=branch_id, erector=erector, year=year
+    ).options(
+        joinedload(EcrReport.tower).joinedload(EcrTower.package),
+        joinedload(EcrReport.branch),
+        joinedload(EcrReport.supervisor),
+    )
     return list(
         db.scalars(query.order_by(EcrReport.updated_at.desc(), EcrReport.id.desc()))
     )
+
+
+def erector_context(db, user, *, status=None, branch_id=None, erector="", year=None):
+    """Scoped SQL counts; partial names may legitimately match several people."""
+    unfiltered_year = dashboard_query(
+        user, status=status, branch_id=branch_id, erector=erector
+    )
+    completed_year = extract("year", EcrReport.erection_completion_date)
+    years = list(
+        db.scalars(
+            unfiltered_year.with_only_columns(completed_year)
+            .where(EcrReport.erection_completion_date.is_not(None))
+            .distinct()
+            .order_by(completed_year.desc())
+        )
+    )
+    if year and year not in years:
+        years = sorted([*years, year], reverse=True)
+    context = {
+        "erector_search": erector,
+        "selected_year": year,
+        "completion_years": years,
+        "erector_summaries": [],
+        "erector_totals": None,
+    }
+    if not erector:
+        return context
+    matched = dashboard_query(
+        user, status=status, branch_id=branch_id, erector=erector, year=year
+    )
+    context["erector_summaries"] = list(
+        db.execute(
+            matched.with_only_columns(
+                User.id.label("supervisor_id"),
+                User.full_name.label("name"),
+                func.count(func.distinct(EcrReport.tower_id)).label("towers"),
+                func.count(EcrReport.id).label("cells"),
+            )
+            .group_by(User.id, User.full_name)
+            .order_by(User.full_name, User.id)
+        )
+    )
+    context["erector_totals"] = db.execute(
+        matched.with_only_columns(
+            func.count(func.distinct(EcrReport.tower_id)).label("towers"),
+            func.count(EcrReport.id).label("cells"),
+        )
+    ).one()
+    return context
 
 
 def smallest_gap(numbers):

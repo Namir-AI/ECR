@@ -1,4 +1,4 @@
-"""Minimal private signature store; no static mount or public file URLs."""
+"""Protected object interface and backward-compatible private signature backend."""
 
 import os
 import re
@@ -12,7 +12,7 @@ from fastapi import Request
 class ProtectedStorage(Protocol):
     """An S3 adapter can later implement this interface without changing DB keys."""
 
-    def put(self, content: bytes) -> str: ...
+    def put(self, content: bytes, media_type: str = "image/png") -> str: ...
     def read(self, key: str) -> bytes: ...
     def delete(self, key: str) -> None: ...
 
@@ -28,7 +28,9 @@ class LocalProtectedStorage:
             raise ValueError("Invalid private object key")
         return self.root / key
 
-    def put(self, content: bytes) -> str:
+    def put(self, content: bytes, media_type: str = "image/png") -> str:
+        if media_type != "image/png":
+            raise ValueError("Signature storage accepts PNG drawings only")
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.root.chmod(0o700)
         key = f"{uuid4().hex}.png"

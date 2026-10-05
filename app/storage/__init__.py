@@ -1,4 +1,4 @@
-"""Protected signature storage only; general attachments remain deferred."""
+"""Protected objects: unchanged signature namespace and shared package evidence."""
 
 from app.storage.protected import (
     LocalProtectedStorage,

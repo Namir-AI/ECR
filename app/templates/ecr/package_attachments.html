@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}JCC and Tower Photo Upload — {{ package.cooling_tower_serial_no }}{% endblock %}
+{% block content %}
+<section class="card" data-package-attachments data-photo-bytes="{{ photo_bytes }}" data-photo-count="{{ photos|length }}" data-photo-limit="{{ photo_limit }}">
+  <div class="heading-row"><div><p class="eyebrow">JCC AND TOWER PHOTOS</p><h1>JCC and Tower Photo Upload</h1><p>{{ package.cooling_tower_serial_no }} · {{ package.customer }}</p></div><a class="button secondary" href="/dashboard">Dashboard</a></div>
+  <p class="muted">JCC and Tower Photos are shared across every Tower and Cell.</p>
+  {% if not editable %}<p class="reference-panel">Read-only. Only the package creator owning a report may change shared evidence, and only before any Cell is Submitted or Approved.</p>{% else %}<p class="muted">Editing is allowed while Cells are Draft or Reviewed. The first submitted Cell freezes these shared attachments.</p>{% endif %}
+  <p data-attachment-status role="status" aria-live="polite"></p>
+  <section class="attachment-section" aria-labelledby="jcc-title"><h2 id="jcc-title">JCC</h2><p class="muted">Multi-page PDF or JPG/JPEG/PNG photo of JCC. Do not upload Tower Photos here.</p>
+  {% if not jcc %}<p>No JCC recorded.</p>{% endif %}
+  <ol class="attachment-list" data-attachment-list="JCC">
+  {% for file in jcc %}<li data-file-id="{{ file.id }}" class="attachment-item">
+    {% if file.media_type != 'application/pdf' %}<img class="attachment-preview" src="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}" alt="JCC page {{ file.position }}" loading="lazy">{% endif %}
+    <div><strong>{% if file.media_type == 'application/pdf' %}PDF · {{ file.pdf_page_count }} page{{ 's' if file.pdf_page_count != 1 else '' }}{% else %}Page {{ file.position }}{% endif %}</strong><p class="attachment-filename">{{ file.display_filename }} ({{ file.byte_size|file_size }})</p>
+    <div class="row-actions"><a href="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}" target="_blank" rel="noopener">View</a><a href="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}?download=true">Download</a>
+    {% if editable %}<button type="button" class="secondary" data-attachment-action="JCC_REMOVE" data-target-id="{{ file.id }}">Remove {{ 'PDF' if file.media_type == 'application/pdf' else 'page' }}</button>{% if file.media_type != 'application/pdf' %}<button type="button" class="secondary" data-reorder="JCC" data-direction="-1" aria-label="Move JCC page {{ file.position }} up"{% if loop.first %} disabled{% endif %}>Move up</button><button type="button" class="secondary" data-reorder="JCC" data-direction="1" aria-label="Move JCC page {{ file.position }} down"{% if loop.last %} disabled{% endif %}>Move down</button>{% endif %}{% endif %}
+    </div></div>
+  </li>{% endfor %}</ol>
+  {% if editable %}<form data-attachment-form data-kind="JCC" method="post" enctype="multipart/form-data" action="/ecr/packages/{{ package.id }}/attachments">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="{{ 'JCC_REPLACE' if jcc and jcc[0].media_type == 'application/pdf' else 'JCC_ADD' }}">
+    {% with picker_label='Choose JCC', picker_multiple=true, picker_accept='application/pdf,image/jpeg,image/png' %}{% include 'ecr/attachment_picker.html' %}{% endwith %}
+    <p class="muted">Selected image order becomes page order. Use Move up/down after saving to adjust it. To replace existing image pages, including switching to PDF, choose files and select Replace whole JCC.</p>
+    <button type="submit">{{ 'Replace JCC' if jcc and jcc[0].media_type == 'application/pdf' else 'Save JCC pages / PDF' }}</button>
+    {% if jcc and jcc[0].media_type != 'application/pdf' %}<button type="submit" name="replace_jcc" value="1" class="secondary">Replace whole JCC</button>{% endif %}
+  </form>{% if jcc %}<button type="button" class="secondary" data-attachment-action="JCC_REMOVE">Remove whole JCC</button>{% endif %}{% endif %}
+  </section>
+  <section class="attachment-section" aria-labelledby="photos-title"><h2 id="photos-title">Tower Photos</h2><p data-photo-summary><strong>{{ photos|length }} of 5</strong> · {{ photo_bytes|file_size }} / 5 MB</p>
+  <p class="muted">JPG/JPEG or PNG. Maximum 5 photos and 5 MB combined.</p>
+  {% if not photos %}<p>No Tower Photos recorded.</p>{% endif %}
+  <ol class="attachment-list" data-attachment-list="TOWER_PHOTO">
+  {% for file in photos %}<li data-file-id="{{ file.id }}" data-byte-size="{{ file.byte_size }}" class="attachment-item"><img class="attachment-preview" src="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}" alt="CT Photo {{ file.position }}" loading="lazy"><div><strong>CT Photo {{ file.position }}</strong><p class="attachment-filename">{{ file.display_filename }} ({{ file.byte_size|file_size }})</p><div class="row-actions"><a href="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}" target="_blank" rel="noopener">View</a><a href="/ecr/packages/{{ package.id }}/attachments/{{ file.id }}?download=true">Download</a>
+  {% if editable %}<button type="button" class="secondary" data-attachment-action="TOWER_PHOTO_REMOVE" data-target-id="{{ file.id }}">Remove photo</button><button type="button" class="secondary" data-reorder="TOWER_PHOTO" data-direction="-1" aria-label="Move photo {{ file.position }} up"{% if loop.first %} disabled{% endif %}>Move up</button><button type="button" class="secondary" data-reorder="TOWER_PHOTO" data-direction="1" aria-label="Move photo {{ file.position }} down"{% if loop.last %} disabled{% endif %}>Move down</button>{% endif %}</div>
+  {% if editable %}<form data-attachment-form data-kind="TOWER_PHOTO" aria-label="Replace CT Photo {{ file.position }}" method="post" enctype="multipart/form-data" action="/ecr/packages/{{ package.id }}/attachments"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="TOWER_PHOTO_REPLACE"><input type="hidden" name="target_id" value="{{ file.id }}">{% with picker_label='Choose Photo', picker_multiple=false, picker_accept='image/jpeg,image/png' %}{% include 'ecr/attachment_picker.html' %}{% endwith %}<button type="submit" class="secondary">Replace Photo</button></form>{% endif %}
+  </div></li>{% endfor %}</ol>
+  {% if editable and photos|length < 5 %}<form data-attachment-form data-kind="TOWER_PHOTO" aria-label="Add Tower Photos" method="post" enctype="multipart/form-data" action="/ecr/packages/{{ package.id }}/attachments"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="TOWER_PHOTO_ADD">{% with picker_label='Choose Photo', picker_multiple=true, picker_accept='image/jpeg,image/png' %}{% include 'ecr/attachment_picker.html' %}{% endwith %}<button type="submit">Add Photos</button></form>{% endif %}
+  </section>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='/package_attachments.js') }}" defer></script>{% endblock %}

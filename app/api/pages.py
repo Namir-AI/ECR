@@ -7,7 +7,13 @@ from app.auth.dependencies import DatabaseSession, OptionalUser, PasswordReadyUs
 from app.branches.services import list_branches
 from app.core.templates import render_template
 from app.ecr.models import EcrReportStatus
-from app.ecr.operations import grouped_reports, visible_reports
+from app.ecr.operations import (
+    dashboard_filter_number,
+    erector_context,
+    grouped_reports,
+    visible_reports,
+)
+from app.ecr.services import EcrIdentityError
 from app.users.models import UserRole
 
 router = APIRouter(tags=["pages"])
@@ -25,12 +31,23 @@ def dashboard(
     db: DatabaseSession,
     user: PasswordReadyUser,
     status_filter: str = Query(default=""),
-    branch_id: int | None = Query(default=None),
+    branch_id: str = Query(default=""),
     cell_page: int = Query(default=1, ge=1),
+    erector: str = Query(default=""),
+    year: str = Query(default=""),
 ) -> Response:
     if status_filter and status_filter not in {s.value for s in EcrReportStatus}:
         raise HTTPException(422, "Select a valid report status.")
-    reports = visible_reports(db, user, status=status_filter, branch_id=branch_id)
+    try:
+        branch_id = dashboard_filter_number(branch_id)
+        year = dashboard_filter_number(year, maximum=9999)
+    except EcrIdentityError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    erector = erector.strip() if user.role is not UserRole.SUPERVISOR else ""
+    year = year if user.role is not UserRole.SUPERVISOR else None
+    reports = visible_reports(
+        db, user, status=status_filter, branch_id=branch_id, erector=erector, year=year
+    )
     return render_template(
         request,
         "ecr/operational_dashboard.html",
@@ -41,5 +58,17 @@ def dashboard(
             "status_filter": status_filter,
             "selected_branch_id": branch_id,
             "branches": list_branches(db) if user.role is UserRole.SUPERADMIN else [],
+            **(
+                erector_context(
+                    db,
+                    user,
+                    status=status_filter,
+                    branch_id=branch_id,
+                    erector=erector,
+                    year=year,
+                )
+                if user.role is not UserRole.SUPERVISOR
+                else {}
+            ),
         },
     )

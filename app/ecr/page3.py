@@ -72,11 +72,11 @@ def validate_signature(data_url: str) -> bytes:
     """Fully decode bounded PNG, inspect ink, re-encode to strip untrusted metadata."""
     prefix = "data:image/png;base64,"
     if not data_url.startswith(prefix):
-        raise ValueError("Save a drawing from the signature pad (PNG only).")
+        raise ValueError("Save a sign from the signature pad (PNG only).")
     try:
         raw = base64.b64decode(data_url[len(prefix) :], validate=True)
         if not raw or len(raw) > PNG_LIMIT:
-            raise ValueError("Signature exceeds the 2 MiB technical limit.")
+            raise ValueError("Customer Sign exceeds the 2 MiB technical limit.")
         with Image.open(BytesIO(raw), formats=["PNG"]) as image:
             width, height = image.size
             if (
@@ -85,7 +85,7 @@ def validate_signature(data_url: str) -> bytes:
                 or width * height > 2_000_000
                 or getattr(image, "n_frames", 1) != 1
             ):
-                raise ValueError("Signature drawing dimensions are too large.")
+                raise ValueError("Customer Sign dimensions are too large.")
             image.load()  # Do not merely check a header or client-supplied flag.
             rgba = image.convert("RGBA")
             white = Image.new("RGBA", image.size, "white")
@@ -94,7 +94,7 @@ def validate_signature(data_url: str) -> bytes:
                 flattened, Image.new("RGB", image.size, "white")
             )
             if difference.getbbox() is None:
-                raise ValueError("Draw a customer signature before saving.")
+                raise ValueError("Enter a Customer Sign before saving.")
             output = BytesIO()
             flattened.save(output, format="PNG")
             return output.getvalue()
@@ -104,4 +104,4 @@ def validate_signature(data_url: str) -> bytes:
         OSError,
         Image.DecompressionBombError,
     ) as exc:
-        raise ValueError("The signature drawing is not a valid PNG.") from exc
+        raise ValueError("The Customer Sign is not a valid PNG.") from exc

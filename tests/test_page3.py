@@ -60,6 +60,54 @@ def sign(client, report, token, **fields):
     )
 
 
+def test_customer_sign_template_states(client, page3_draft):
+    _, report, token = page3_draft
+    unsigned = client.get(f"/ecr/reports/{report.id}/edit").text
+    assert unsigned.count("data-signature-card ") == 1
+    assert unsigned.count("<canvas ") == 1
+    assert ">Clear Sign</button>" in unsigned and ">Save Sign</button>" in unsigned
+    assert "Customer Sign <span" in unsigned
+    assert "Clear Drawing" not in unsigned and "Drawing cleared" not in unsigned
+    assert sign(client, report, token).status_code == 200
+    saved = client.get(f"/ecr/reports/{report.id}/edit").text
+    assert saved.count("data-signature-card ") == 1
+    assert "<canvas " not in saved
+    assert saved.count("data-signature-image ") == 1
+    assert ">Replace Sign</button>" in saved and ">Remove Sign</button>" in saved
+    assert "data-signature-editor hidden" in saved
+    assert "Drawing" not in saved
+
+
+@pytest.mark.parametrize(
+    "status",
+    [EcrReportStatus.REVIEWED, EcrReportStatus.SUBMITTED, EcrReportStatus.APPROVED],
+)
+def test_customer_sign_locked_states(client, db_session, page3_draft, status):
+    _, report, token = page3_draft
+    assert sign(client, report, token).status_code == 200
+    key, signed_at = (
+        report.page3.customer_signature_storage_key,
+        report.page3.customer_signed_at,
+    )
+    report.status = status
+    db_session.commit()
+    html = client.get(f"/ecr/reports/{report.id}").text
+    assert html.count('alt="Saved Customer Sign"') == 1
+    assert "data-signature-pad" not in html
+    for control in ("Save Sign", "Clear Sign", "Replace Sign", "Remove Sign"):
+        assert control not in html
+    assert sign(client, report, token).status_code == 409
+    assert (
+        client.delete(
+            f"/ecr/reports/{report.id}/signature", headers={"X-CSRF-Token": token}
+        ).status_code
+        == 409
+    )
+    db_session.expire_all()
+    assert report.page3.customer_signature_storage_key == key
+    assert report.page3.customer_signed_at == signed_at
+
+
 @pytest.mark.parametrize("field", ["team_leader_report", "customer_comment"])
 @pytest.mark.parametrize(
     "value",
@@ -329,7 +377,8 @@ def test_signature_privacy_and_report_identity(
     if authorized:
         html = client.get(f"/reports/{report.id}").text
         assert owner.full_name in html and owner.full_name.upper() in html
-        assert "signature-pad" not in html and "Save Signature" not in html
+        assert "signature-pad" not in html and "Save Sign" not in html
+        assert html.count('alt="Saved Customer Sign"') == 1
         assert (
             client.post(
                 f"/ecr/reports/{report.id}/signature",
@@ -427,6 +476,49 @@ def test_save_failure_preserves_prior_signature(
         assert sign(client, report, token).status_code == 503
     db_session.expire_all()
     assert report.page3.customer_signature_storage_key == key
+    assert client.get(f"/ecr/reports/{report.id}/signature").status_code == 200
+
+
+def test_signature_cleanup_failure_preserves_committed_replacement(
+    client, db_session, page3_draft, monkeypatch
+):
+    _, report, token = page3_draft
+    assert sign(client, report, token).status_code == 200
+    old_key = report.page3.customer_signature_storage_key
+    store = client.app.state.protected_storage
+
+    def fail_cleanup(_key):
+        raise OSError("simulated cleanup failure")
+
+    monkeypatch.setattr(store, "delete", fail_cleanup)
+    assert sign(client, report, token).status_code == 200
+    db_session.expire_all()
+    new_key = report.page3.customer_signature_storage_key
+    assert new_key != old_key and report.page3.customer_signed_at is not None
+    assert store._path(old_key).exists() and store._path(new_key).exists()
+    assert client.get(f"/ecr/reports/{report.id}/signature").status_code == 200
+
+
+def test_signature_lost_commit_acknowledgement_keeps_possibly_committed_object(
+    client, db_session, page3_draft, monkeypatch
+):
+    _, report, token = page3_draft
+    assert sign(client, report, token).status_code == 200
+    old_key = report.page3.customer_signature_storage_key
+    original_commit = db_session.commit
+
+    def committed_but_disconnected():
+        original_commit()
+        raise OperationalError("mock lost acknowledgement", {}, Exception("offline"))
+
+    with monkeypatch.context() as patch:
+        patch.setattr(db_session, "commit", committed_but_disconnected)
+        assert sign(client, report, token).status_code == 503
+    db_session.expire_all()
+    new_key = report.page3.customer_signature_storage_key
+    store = client.app.state.protected_storage
+    assert new_key != old_key and report.page3.customer_signed_at is not None
+    assert store._path(old_key).exists() and store._path(new_key).exists()
     assert client.get(f"/ecr/reports/{report.id}/signature").status_code == 200
 
 

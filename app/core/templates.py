@@ -13,6 +13,16 @@ TEMPLATE_DIRECTORY = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
 
 
+def file_size(byte_size: int) -> str:
+    """Decimal KB/MB for presentation only; validation always uses exact bytes."""
+    divisor, unit = (1_000_000, "MB") if byte_size >= 1_000_000 else (1000, "KB")
+    value = f"{byte_size / divisor:.2f}".rstrip("0").rstrip(".")
+    return f"{value} {unit}"
+
+
+templates.env.filters["file_size"] = file_size
+
+
 def render_template(
     request: Request,
     name: str,

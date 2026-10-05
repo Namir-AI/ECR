@@ -1,0 +1,7 @@
+<div class="attachment-picker">
+  <label class="button secondary file-picker">
+    <span>{{ picker_label }}</span>
+    <input class="file-picker-input" name="files" type="file" aria-label="{{ picker_label }}" {% if picker_multiple %}multiple{% endif %} accept="{{ picker_accept }}" required>
+  </label>
+  <span class="selected-filenames muted" data-selected-filenames aria-live="polite">No file selected</span>
+</div>

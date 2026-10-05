@@ -88,9 +88,14 @@ def test_text_signature_replace_clear_reload_mobile(
     page.locator(".completion-identity").screenshot(
         path=str(tmp_path / f"identity-{width}.png")
     )
-    assert (
-        page.locator("[data-signature-clear-drawing]").inner_text() == "Clear Signature"
-    )
+    assert page.locator("[data-signature-clear-drawing]").inner_text() == "Clear Sign"
+    assert page.get_by_role("button", name="Save Sign", exact=True).is_visible()
+    assert page.locator("[data-signature-card]").count() == 1
+    assert page.locator("[data-signature-pad]").count() == 1
+    assert page.locator("[data-signature-saved-actions]").is_hidden()
+    page.get_by_role("button", name="Clear Sign", exact=True).click()
+    assert page.locator("[data-signature-status]").inner_text() == "Sign cleared"
+    assert "Drawing" not in page.locator("[data-signature-card]").inner_text()
     assert page.locator('[name="team_leader_report"]').input_value() == ""
     assert page.locator('[name="customer_comment"]').input_value() == ""
     assert "optional" in page.locator("#signature-heading").inner_text()
@@ -119,6 +124,10 @@ def test_text_signature_replace_clear_reload_mobile(
     page.set_viewport_size({"width": width + 20, "height": 850})
     page.locator("[data-signature-save]").click()
     wait_signature(page)
+    assert page.locator("[data-signature-pad]").count() == 0
+    assert page.locator("[data-saved-signature]:visible").count() == 1
+    assert page.get_by_role("button", name="Replace Sign", exact=True).is_visible()
+    assert page.get_by_role("button", name="Save Sign", exact=True).is_hidden()
     assert "Signed on:" in page.locator("[data-signed-at]").inner_text()
     db_session.expire_all()
     first_key = report.page3.customer_signature_storage_key
@@ -133,7 +142,23 @@ def test_text_signature_replace_clear_reload_mobile(
     page.locator("[data-signature-card]").screenshot(
         path=str(tmp_path / f"signed-{width}.png")
     )
-    # Clear unsaved drawing keeps stored signature and needs no confirmation.
+    assert page.locator("[data-signature-pad]").count() == 0
+    assert page.locator("#signature-heading").count() == 1
+    # Explicit replacement alone opens a single pad. Cancel keeps saved evidence.
+    previous_src = image.get_attribute("src")
+    page.get_by_role("button", name="Replace Sign", exact=True).click()
+    assert page.locator("[data-signature-pad]").count() == 1
+    assert page.locator("[data-saved-signature]").is_hidden()
+    draw(page, offset=2)
+    page.locator("[data-signature-replace-cancel]").click()
+    assert page.locator("[data-signature-pad]").count() == 0
+    assert image.is_visible() and image.get_attribute("src") == previous_src
+    db_session.expire_all()
+    assert report.page3.customer_signature_storage_key == first_key
+    page.get_by_role("button", name="Replace Sign", exact=True).focus()
+    page.keyboard.press("Enter")
+    assert page.locator("[data-signature-pad]").count() == 1
+    # Clear the unsaved replacement without touching the saved sign.
     draw(page, offset=2)
     page.locator("[data-signature-clear-drawing]").click()
     assert not page.locator("[data-signature-remove-dialog]").is_visible()
@@ -144,6 +169,7 @@ def test_text_signature_replace_clear_reload_mobile(
     wait_signature(page)
     db_session.expire_all()
     assert report.page3.customer_signature_storage_key != first_key
+    assert page.locator("[data-signature-pad]").count() == 0
     page.locator("[data-signature-remove]").click()
     assert page.locator("[data-signature-remove-dialog]").is_visible()
     page.keyboard.press("Escape")
@@ -155,7 +181,10 @@ def test_text_signature_replace_clear_reload_mobile(
     page.locator("[data-signature-remove-confirm]").focus()
     page.keyboard.press("Enter")
     wait_signature(page)
+    assert page.locator("[data-signature-pad]:visible").count() == 1
+    assert page.locator("[data-saved-signature]").is_hidden()
     page.reload()
+    assert page.locator("[data-signature-pad]").count() == 1
     assert page.locator("[data-saved-signature]").is_hidden()
     assert page.locator("[data-signed-at]").inner_text() == ""
     db_session.expire_all()
@@ -185,11 +214,72 @@ def test_signature_failure_retains_drawing_no_false_saved(completion_browser, fa
     draw(page)
     page.locator("[data-signature-save]").click()
     wait_signature(page, "error")
-    assert "Signature saved" not in page.locator("[data-signature-status]").inner_text()
+    assert "Sign saved" not in page.locator("[data-signature-status]").inner_text()
     assert page.locator("[data-signed-at]").inner_text() == ""
     page.unroute("**/signature")
     page.locator("[data-signature-save]").click()
     wait_signature(page)
+
+
+@pytest.mark.parametrize("failure", ["http", "network", "unconfirmed"])
+def test_replacement_failure_keeps_authoritative_sign(
+    completion_browser, db_session, failure
+):
+    page, report = completion_browser
+    draw(page)
+    page.get_by_role("button", name="Save Sign", exact=True).click()
+    wait_signature(page)
+    db_session.expire_all()
+    key, signed_at = (
+        report.page3.customer_signature_storage_key,
+        report.page3.customer_signed_at,
+    )
+    page.get_by_role("button", name="Replace Sign", exact=True).click()
+    draw(page, offset=5)
+
+    def fail(route):
+        if route.request.method != "POST":
+            route.continue_()
+        elif failure == "network":
+            route.abort()
+        else:
+            route.fulfill(status=503 if failure == "http" else 200, json={"ok": True})
+
+    page.route("**/signature", fail)
+    page.get_by_role("button", name="Save Sign", exact=True).click()
+    wait_signature(page, "error")
+    assert page.locator("[data-signature-pad]:visible").count() == 1
+    assert "Sign saved" not in page.locator("[data-signature-status]").inner_text()
+    page.locator("[data-signature-replace-cancel]").click()
+    assert page.locator("[data-signature-pad]").count() == 0
+    assert page.locator("[data-saved-signature]:visible").count() == 1
+    db_session.expire_all()
+    assert report.page3.customer_signature_storage_key == key
+    assert report.page3.customer_signed_at == signed_at
+    page.unroute("**/signature")
+    page.reload()
+    assert page.locator("[data-signature-pad]").count() == 0
+
+
+def test_signature_initializer_is_idempotent(completion_browser):
+    page, _ = completion_browser
+    page.evaluate("initializeCustomerSignature(); initializeCustomerSignature();")
+    assert page.locator("[data-signature-card]").count() == 1
+    assert page.locator("[data-signature-pad]").count() == 1
+    posts = []
+    page.on(
+        "request",
+        lambda request: (
+            posts.append(request.url)
+            if request.method == "POST" and request.url.endswith("/signature")
+            else None
+        ),
+    )
+    draw(page)
+    page.get_by_role("button", name="Save Sign", exact=True).click()
+    wait_signature(page)
+    assert len(posts) == 1
+    assert page.locator("[data-signature-pad]").count() == 0
 
 
 @pytest.mark.parametrize("role", [UserRole.BRANCH_ADMIN, UserRole.SUPERADMIN])
@@ -226,6 +316,10 @@ def test_page3_admin_readonly_identity_signature(
         page.locator("[data-signature-pad], [data-signature-save], textarea").count()
         == 0
     )
+    assert page.locator(".customer-signature-image").count() == 1
+    assert page.get_by_role("heading", name="Customer Sign (optional)").count() == 1
+    assert page.get_by_role("button", name="Replace Sign", exact=True).count() == 0
+    assert page.get_by_role("button", name="Remove Sign", exact=True).count() == 0
 
 
 def test_text_older_acknowledgement_cannot_mark_new_edit_saved(completion_browser):

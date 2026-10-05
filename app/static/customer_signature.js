@@ -2,9 +2,14 @@
 
 const initializeCustomerSignature = () => {
   const card = document.querySelector("[data-signature-card]");
-  if (!card) return;
-  const canvas = card.querySelector("[data-signature-pad]");
-  const context = canvas.getContext("2d");
+  if (!card || card.dataset.signatureInitialized === "true") return;
+  card.dataset.signatureInitialized = "true";
+  let canvas = card.querySelector("[data-signature-pad]");
+  let context = canvas ? canvas.getContext("2d") : null;
+  const editor = card.querySelector("[data-signature-editor]");
+  const savedActions = card.querySelector("[data-signature-saved-actions]");
+  const replaceButton = card.querySelector("[data-signature-replace]");
+  const cancelButton = card.querySelector("[data-signature-replace-cancel]");
   const feedback = card.querySelector("[data-signature-status]");
   const saveButton = card.querySelector("[data-signature-save]");
   const clearButton = card.querySelector("[data-signature-clear-drawing]");
@@ -45,6 +50,7 @@ const initializeCustomerSignature = () => {
     });
   };
   const redraw = () => {
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const ratio = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(rect.width * ratio));
@@ -53,7 +59,7 @@ const initializeCustomerSignature = () => {
   };
   // Normalized vector coordinates, not a stretched previous bitmap, survive
   // resizing/orientation changes. Export uses a stable print-quality resolution.
-  new ResizeObserver(redraw).observe(canvas);
+  const resizeObserver = new ResizeObserver(redraw);
   const point = (event) => {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -61,37 +67,66 @@ const initializeCustomerSignature = () => {
       y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
     };
   };
-  canvas.addEventListener("pointerdown", (event) => {
-    if (busy || !event.isPrimary || event.button !== 0) return;
-    event.preventDefault();
-    pointerId = event.pointerId;
-    activeStroke = [point(event)];
-    strokes.push(activeStroke);
-    canvas.setPointerCapture(pointerId);
+  const bindPad = () => {
+    canvas.addEventListener("pointerdown", (event) => {
+      if (busy || !event.isPrimary || event.button !== 0) return;
+      event.preventDefault();
+      pointerId = event.pointerId;
+      activeStroke = [point(event)];
+      strokes.push(activeStroke);
+      canvas.setPointerCapture(pointerId);
+      redraw();
+      showStatus("Sign not saved — choose Save Sign", "pending");
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!activeStroke || event.pointerId !== pointerId) return;
+      event.preventDefault();
+      activeStroke.push(point(event));
+      paint(context, canvas.width, canvas.height);
+    });
+    const finishStroke = (event) => {
+      if (event.pointerId !== pointerId) return;
+      activeStroke = null;
+      pointerId = null;
+    };
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((event) => canvas.addEventListener(event, finishStroke));
+    resizeObserver.observe(canvas);
     redraw();
-    showStatus("Drawing not saved — choose Save Signature", "pending");
-  });
-  canvas.addEventListener("pointermove", (event) => {
-    if (!activeStroke || event.pointerId !== pointerId) return;
-    event.preventDefault();
-    activeStroke.push(point(event));
-    paint(context, canvas.width, canvas.height);
-  });
-  const finishStroke = (event) => {
-    if (event.pointerId !== pointerId) return;
+  };
+  const resetStrokes = () => {
+    strokes = [];
     activeStroke = null;
     pointerId = null;
   };
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach((event) => canvas.addEventListener(event, finishStroke));
+  const showEditor = (editing) => {
+    editor.hidden = !editing;
+    card.querySelector("[data-saved-signature]").hidden = editing || !savedPresent;
+    savedActions.hidden = editing || !savedPresent;
+    cancelButton.hidden = !savedPresent;
+    if (editing && !canvas) {
+      canvas = document.createElement("canvas");
+      canvas.className = "signature-pad";
+      canvas.dataset.signaturePad = "";
+      canvas.setAttribute("aria-label", "Optional Customer Sign area");
+      canvas.textContent = "Customer Sign can be entered using a pointer; it is optional.";
+      card.querySelector("[data-signature-pad-container]").append(canvas);
+      context = canvas.getContext("2d");
+      bindPad();
+    } else if (!editing && canvas) {
+      resizeObserver.disconnect();
+      canvas.remove();
+      canvas = null;
+      context = null;
+    }
+  };
+  if (canvas) bindPad();
 
-  const applyState = (state) => {
+  const applyState = (state, keepEditor = false) => {
     if (typeof state.present !== "boolean" || (state.present && (typeof state.signed_at !== "string" || !state.url))) {
       throw new Error("Server did not confirm signature state");
     }
     savedPresent = state.present;
-    card.querySelector("[data-saved-signature]").hidden = !savedPresent;
-    card.querySelector("[data-no-signature]").hidden = savedPresent;
-    removeButton.hidden = !savedPresent;
+    showEditor(!savedPresent || keepEditor);
     const image = card.querySelector("[data-signature-image]");
     if (savedPresent) {
       // Use the fixed report route, never a client/server supplied filesystem key.
@@ -105,7 +140,7 @@ const initializeCustomerSignature = () => {
   const persist = async (method) => {
     if (busy) return;
     if (method === "POST" && strokes.length === 0) {
-      showStatus("Draw a customer signature before saving", "error");
+      showStatus("Enter a Customer Sign before saving", "error");
       return;
     }
     const body = method === "POST" ? (() => {
@@ -116,10 +151,10 @@ const initializeCustomerSignature = () => {
       return JSON.stringify({ signature_png: exportCanvas.toDataURL("image/png") });
     })() : undefined;
     busy = true;
-    [saveButton, clearButton, removeButton].forEach(button => { button.disabled = true; });
+    [saveButton, clearButton, removeButton, replaceButton, cancelButton].forEach(button => { button.disabled = true; });
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 15000);
-    showStatus(method === "POST" ? "Saving signature…" : "Removing signature…", "saving");
+    showStatus(method === "POST" ? "Saving sign…" : "Removing sign…", "saving");
     try {
       const response = await fetch(card.dataset.signatureUrl, {
         method, body, credentials: "same-origin", signal: controller.signal,
@@ -130,10 +165,9 @@ const initializeCustomerSignature = () => {
         throw new Error("Signature save was not confirmed");
       }
       applyState(result.signature);
-      strokes = [];
-      activeStroke = null;
+      resetStrokes();
       redraw();
-      showStatus(method === "POST" ? "Signature saved" : "Saved signature removed", "saved");
+      showStatus(method === "POST" ? "Sign saved" : "Saved sign removed", "saved");
     } catch (_error) {
       // A dropped response can follow a commit. Reconcile display, but never
       // claim a successful save merely because the network request was started.
@@ -141,21 +175,37 @@ const initializeCustomerSignature = () => {
         const response = await fetch(card.dataset.signatureStateUrl, {
           credentials: "same-origin", cache: "no-store", signal: controller.signal,
         });
-        if (response.ok && !response.redirected) applyState(await response.json());
-      } catch (_stateError) { /* Keep unsaved drawing; reload remains safe. */ }
-      showStatus("Unable to save signature — drawing kept. Retry or reload to verify saved state.", "error");
+        if (response.ok && !response.redirected) applyState(await response.json(), method === "POST");
+      } catch (_stateError) { /* Keep unsaved sign; reload remains safe. */ }
+      showStatus(method === "POST"
+        ? "Unable to save sign — unsaved sign kept. Retry or reload to verify saved state."
+        : "Unable to remove sign. Retry or reload to verify saved state.", "error");
     } finally {
       clearTimeout(timer);
       busy = false;
-      [saveButton, clearButton, removeButton].forEach(button => { button.disabled = false; });
+      [saveButton, clearButton, removeButton, replaceButton, cancelButton].forEach(button => { button.disabled = false; });
+      if (feedback.dataset.state === "saved") (savedPresent ? replaceButton : clearButton).focus();
     }
   };
   clearButton.addEventListener("click", () => {
     if (busy) return;
-    strokes = [];
-    activeStroke = null;
+    resetStrokes();
     redraw();
-    showStatus(savedPresent ? "Drawing cleared; saved signature kept" : "Signature is optional", "neutral");
+    showStatus(savedPresent ? "Sign cleared; saved sign kept" : "Sign cleared", "neutral");
+  });
+  replaceButton.addEventListener("click", () => {
+    if (busy) return;
+    resetStrokes();
+    showEditor(true);
+    showStatus("Replacement sign not saved; saved sign kept", "neutral");
+    clearButton.focus();
+  });
+  cancelButton.addEventListener("click", () => {
+    if (busy) return;
+    resetStrokes();
+    showEditor(false);
+    showStatus("Saved sign kept", "neutral");
+    replaceButton.focus();
   });
   saveButton.addEventListener("click", () => persist("POST"));
   removeButton.addEventListener("click", () => dialog.showModal());

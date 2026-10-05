@@ -7,12 +7,14 @@ import pytest
 from app.db.session import get_db_session
 from app.users.models import UserRole
 from tests import test_draft_save_browser as browser_tests
+from tests import test_owner_ui as owner_tests
 from tests.test_page1_browser import wait_saved
 from tests.test_phase3 import _create_report
 from tests.test_phase5 import complete_report
 
 draft_browser = browser_tests.draft_browser
 playwright = browser_tests.playwright
+performance = owner_tests.performance
 
 
 @pytest.fixture
@@ -38,6 +40,48 @@ def browser_login(page, base, user):
     page.locator('[name="password"]').fill("Correct-Horse-123")
     page.locator('button[type="submit"]').click()
     page.wait_for_url("**/dashboard")
+
+
+@pytest.mark.parametrize("width", [390, 1440])
+@pytest.mark.parametrize("role", ["branch", "global"])
+def test_erector_search_mobile_desktop(
+    operations_browser, performance, role, width, tmp_path
+):
+    page, _ = operations_browser
+    viewer = performance[4] if role == "branch" else performance[5]
+    browser_login(page, base_url(page), viewer)
+    page.set_viewport_size({"width": width, "height": 950})
+    page.get_by_label("Erector / Supervisor Name").fill("satadru")
+    page.get_by_label("Year", exact=True).select_option("2026")
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.get_by_role("button", name="Search", exact=True).click()
+    playwright.expect(page.locator("[data-erector-towers]")).to_have_text(
+        "1" if role == "branch" else "2"
+    )
+    playwright.expect(page.locator("[data-erector-cells]")).to_have_text(
+        "2" if role == "branch" else "3"
+    )
+    names = page.locator('td[data-label="Erected / Submitted By"]')
+    assert names.count() == (2 if role == "branch" else 3)
+    assert all(
+        name.is_visible() and name.inner_text() == "Satadru Nath"
+        for name in names.all()
+    )
+    assert (
+        page.get_by_role(
+            "link", name="Attachments JCC & Tower Photo", exact=True
+        ).count()
+        >= 1
+    )
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.get_by_role("button", name="Approved", exact=True).click()
+    playwright.expect(page.locator("[data-erector-cells]")).to_have_text("1")
+    assert page.get_by_label("Erector / Supervisor Name").input_value() == "satadru"
+    assert page.get_by_label("Year", exact=True).input_value() == "2026"
+    assert page.locator(".dashboard-panel").evaluate(
+        "el => el.scrollWidth <= el.clientWidth"
+    )
+    page.screenshot(path=str(tmp_path / f"erector-{role}-{width}.png"), full_page=True)
 
 
 @pytest.mark.parametrize("width", [390, 1440])

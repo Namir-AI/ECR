@@ -6,6 +6,12 @@ Internal web application for digitizing Paharpur Cooling Towers Ltd. Erection
 The current implementation scope is the shared application foundation and the
 ECR module only. Budget and Bill modules are not implemented.
 
+Current implemented scope: Phases 1–5 (technical Pages 1–3, optional customer
+signature, dashboards, Review/Submit/Approval and scoped exact serial search),
+plus Phase 6 package attachments pending owner acceptance. Official PDF remains
+deferred. Earlier phase sections describe their migration history, not missing
+current workflow/search functionality.
+
 ## Local prerequisites
 
 - Ubuntu/Linux
@@ -102,7 +108,8 @@ alembic upgrade head
 ```
 
 Phase 3 adds relational ECR Package, Tower, and Cell Report identity tables.
-Phase 4A adds Page 1 technical data; no attachment, Budget, or Bill tables exist.
+Phase 4A adds Page 1 technical data. Phase 6 adds package attachment metadata;
+Budget and Bill tables remain absent.
 
 ## Phase 3 Draft flow
 
@@ -115,7 +122,8 @@ Draft erection dates autosave after changes and persist across reloads. A
 Supervisor sees only their own reports. Branch Admins can open the read-only
 Reports page for reports historically created in their branch, while the
 Superadmin can view all branches. Pages 1–3 extend this same Draft flow;
-submission, approval, attachments and advanced report search remain deferred.
+Phase 5 implements submission/approval and exact serial search; Phase 6 adds
+optional shared package attachments.
 
 ## Create the initial Superadmin
 
@@ -294,9 +302,9 @@ pytest
 
 Downgrade drops Batch A+B data only. Back up populated data before any deliberate
 downgrade; accepted Page 1, identity, users and branch tables are not modified.
-Workflow, attachments,
-search, PDF, final Gearbox lists and controlled post-submission Current Drawn
-correction remain deferred.
+Workflow/search are implemented in Phase 5 and attachments in Phase 6.
+PDF, final Gearbox lists and controlled post-submission Current Drawn correction
+remain deferred.
 
 Browser regressions use optional Playwright/Chromium tooling, separate from the
 application runtime and shared development virtual environment:
@@ -310,7 +318,8 @@ ECR_BROWSER_HEADED=1 PYTHONPATH="$PLAYWRIGHT_SITE" pytest tests/test_page1_brows
 ```
 
 Without that optional tooling, pytest reports browser modules as skipped.
-Attachments, submission/approval, advanced search and PDF remain deferred.
+Phase 5 implements submission/approval and serial search; Phase 6 implements
+attachments. Official PDF remains deferred.
 
 ## Phase 4B2 — Page 2 Batch C
 
@@ -354,9 +363,9 @@ Downgrade removes Batch C only, including torque rows. Back up populated data
 and obtain explicit approval before any deliberate downgrade. Existing Page 1,
 Page 2 A+B, identity, users and branches are preserved.
 
-Deferred: workflow, attachments, advanced search, official PDF, final
-Gearbox Series/Ratio lists, audited post-submission Current Drawn correction,
-and audited Superadmin shared-Series correction.
+Workflow/search and attachments are now implemented in Phases 5 and 6.
+Deferred: official PDF, final Gearbox Series/Ratio lists, audited post-submission
+Current Drawn correction, and audited Superadmin shared-Series correction.
 
 ## Phase 4C — Page 3 + optional customer signature
 
@@ -374,11 +383,13 @@ derived from the report's Supervisor, with the latter presented in uppercase.
 No separate editable identity is stored. At future submission, historical display
 identity may need a snapshot; that workflow is not implemented here.
 
-Customer Signature is optional. Draw using finger/stylus/mouse, then explicitly
-choose **Save Signature**. **Save now does not save an unsaved drawing**. The
+Customer Sign is optional. Sign using finger/stylus/mouse, then explicitly
+choose **Save Sign**. **Save now does not save an unsaved sign**. The
 responsive pad retains normalized strokes across resizing and exports a
-1800×600 PNG. Clear drawing discards only unsaved strokes; removing a saved
-signature uses confirmation and also clears its timestamp. Replacement is
+1800×600 PNG. Once saved, only the saved sign and **Replace Sign / Remove Sign**
+actions are shown, not another pad. **Replace Sign** opens one replacement pad;
+**Clear Sign** discards only unsaved strokes and **Cancel** retains the saved sign.
+**Remove Sign** uses confirmation and also clears its timestamp. Replacement is
 supported only for the authenticated owner's Draft. No camera, document/image
 upload, customer-name/designation field or separate digital seal is implemented.
 
@@ -407,7 +418,7 @@ the protected files **together with the database**; a DB-only restore cannot
 restore signature content. The existing shared-data backup layout can include it.
 
 Storage has a small put/read/delete interface suitable for a future S3 adapter;
-S3 and general attachment workflows are not implemented. DB commit precedes
+S3 remains deferred; Phase 6 extends protected storage for attachments. DB commit precedes
 old-object cleanup. A crash/ambiguous commit or cleanup failure may leave an
 unreferenced private file. No automatic broad file deletion/garbage collection
 is implemented; any later maintenance must reconcile DB references safely.
@@ -424,10 +435,10 @@ pytest
 
 Downgrade removes Page-3 data, not existing Page-1/2 reports or private files.
 Back up populated data and obtain approval before a deliberate downgrade.
-Future workflow must lock normal Supervisor signature changes after submission.
-Review/Confirm/Submit, Approval, JCC, Tower Photos, search, PDF, final Gearbox
-lists, controlled Current Drawn correction and audited shared-Series correction
-remain deferred.
+Phase 5 locks normal Supervisor signature changes outside DRAFT and implements
+Review/Confirm/Submit, Approval and search. Phase 6 adds JCC/Tower Photos.
+PDF, final Gearbox lists, controlled Current Drawn correction and audited
+shared-Series correction remain deferred.
 
 ## Phase 5 — operational dashboards, workflow, search and approval
 
@@ -445,6 +456,15 @@ virtual UI rows, never stored reports. Occupied private Cells are unavailable,
 not "Not started". Large declared counts page virtual rows in batches of 50
 (a presentation limit, not a Cell No. limit).
 
+Admin dashboard/list rows show **Erected / Submitted By** from the report's
+Supervisor relationship (no editable duplicate or historical-name snapshot).
+**Search by Erector** supports literal, case-insensitive partial names and
+Completion-Date years, combined with existing branch/status filters. SQL counts
+distinct Towers and matched Cell reports in the same authorized scope. All years
+includes undated Draft/Reviewed work; specific years exclude NULL dates. Partial
+names matching several accounts show each account's summary plus scoped totals.
+Search results reuse the existing Package → Tower → Cell cards.
+
 Supervisors can create a missing Cell or use **+ Add another Cell** (smallest
 positive unused Cell No.). Confirmation creates a blank Draft with no copied
 dates, technical data, text or signature. Declared cell count is descriptive and
@@ -456,7 +476,7 @@ remain unchanged.
 Workflow is per Cell: **DRAFT → REVIEWED → SUBMITTED → APPROVED**. Review checks
 the centralized owner-approved final-required metadata and supplied-value
 validators, grouped by applicable sections. Zero Current Drawn and DE/NDE
-readings are valid; optional fields/signature and deferred JCC/photos do not
+readings are valid; optional fields/signature and optional package JCC/photos do not
 block. Back to Edit returns REVIEWED to DRAFT and clears `reviewed_at` without
 changing data. Confirm & Submit revalidates and locks Supervisor editing.
 Branch Admin (historical branch) / Superadmin (global) can explicitly save
@@ -484,6 +504,76 @@ data. Downgrade removes workflow/audit metadata and refuses unresolved NULL
 completion dates rather than fabricating dates. Back up populated data before
 any deliberate downgrade. Existing Page-1/2/3 content is preserved.
 
-Deferred: JCC, Tower Photos, PDF, Budget/Bills, final Gearbox lookup lists,
+Deferred: PDF, Budget/Bills, final Gearbox lookup lists,
 controlled post-approval Current Drawn correction, audited shared-Series
 correction, and historical display-name snapshot policy for official records.
+
+## Phase 6 — package attachments (JCC + Tower Photos)
+
+Migration `6a2c9e4f107b` follows `5e7a2d9c104b`. It adds
+`ecr_jcc_documents`, `ecr_package_attachments` and `ecr_package_audit_events`.
+Attachments belong to the **Package**, shared by all Towers/Cells, not to an
+individual report. Open **Attachments JCC & Tower Photo** from Draft or full report
+views; dashboards/search continue to use the existing report renderer.
+The **JCC and Tower Photo Upload** page uses accessible compact file pickers and
+one decimal KB/MB presentation helper; exact stored bytes still enforce limits.
+The add-photo form is hidden at five photos and returns after removal.
+
+- JCC is one logical document: one single/multi-page PDF, or ordered JPG/JPEG/PNG
+  pages. Add/remove/reorder photographed pages or replace the whole document.
+  No application-level JCC byte-size cap is imposed; JCC pages never consume the
+  Tower Photo allowance. Pages are not converted to PDF.
+- Tower Photos form a separate ordered pool, maximum **5 photos / 5 MB combined**
+  (5,000,000 original uploaded/stored bytes). Server limits are authoritative;
+  browser checks mirror count/size. Images are never compressed to fit the limit.
+- Actual content is fully parsed/decoded, not trusted from filename/MIME. PDFs
+  with scripts/active actions/embedded files, encrypted/uninspectable PDFs,
+  malformed images/documents and unsupported formats are rejected. Parsing uses
+  [pypdf's strict reader](https://pypdf.readthedocs.io/en/stable/modules/PdfReader.html).
+  Multipart files are disk-backed from the first byte, validated through seekable
+  streams and staged one at a time. Storage copies and private HTTP downloads use
+  64 KiB chunks, not whole-file byte arrays. PDF dictionaries/references are
+  inspected without indiscriminately decompressing arbitrary content streams.
+  Pillow still fully decodes each image; parser memory depends on document/image
+  complexity, and operators must provision temporary/protected disk and proxy
+  upload settings. No deployment settings or JCC size cap are introduced.
+
+Only the package creator Supervisor **still owning at least one package report**
+may mutate evidence. DRAFT and REVIEWED Cells allow editing; **any SUBMITTED or
+APPROVED Cell anywhere in the package locks all Supervisor attachment mutations**.
+Attachments changing does not reset REVIEWED status. Evidence remains optional
+for Review/Submit/Approval. Admins are read-only (historical branch scope for
+Branch Admin; global for Superadmin). Other Supervisors need an existing owned
+package report to view and can never modify its shared evidence.
+
+Preliminary authorization is non-locking, and its read transaction ends before
+multipart reception, expensive validation or protected-object staging. Only then
+does publication lock the package and all Cell statuses, recheck ownership,
+editability and current count/size/action semantics, and commit metadata/audit.
+This serializes final publication/reorders against submission and concurrent
+count/size changes without holding business locks during a slow upload. If a Cell
+submits first, publication is rejected and definitely unreferenced staged objects
+are removed. Private downloads authorize before opening a bounded streaming
+response, with private/no-store, nosniff, sandbox and stored Content-Length headers.
+Package audit records commit with metadata, recording actor/role/action, positions,
+safe filenames/media/sizes, without signature/file bytes, secrets, absolute paths
+or protected object keys. Existing report audits are not repurposed.
+
+Binary objects use the extended protected-storage interface in a separate
+`STORAGE_ROOT/attachments` namespace; existing signatures stay in `signatures`.
+Server-generated immutable keys, private directories/files (0700/0600),
+descriptor-relative no-symlink IO and authenticated authorization-before-read
+routes prevent public/static access and traversal. Back up the **database and
+entire persistent STORAGE_ROOT together** using existing deployment backup/restore
+tools; do not put storage inside the Git application directory.
+
+Replacement commits the new reference before cleaning the old object. Failures
+before commit remove staged objects when safe; uncertain commit results retain
+them rather than risk deleting valid content. Cleanup failures may leave private
+orphans but do not invalidate the new reference. Reviewed orphan reconciliation
+is deferred; no broad garbage collection is implemented. Migration downgrade
+removes only Phase-6 metadata, **never protected files**; file reconciliation
+requires operator review. Do not downgrade populated production data for testing.
+
+Verification: `pytest` (optional Playwright/Chromium browser setup above),
+`alembic upgrade head`, `alembic check`, Python compilation and changed-file Ruff.

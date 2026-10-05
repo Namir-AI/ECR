@@ -2,6 +2,12 @@
 
 This TODO tracks implementation of the digital Erection & Commissioning Report application.
 
+Current delivery state: Phases 1–5 are accepted (Pages 1–3, optional signature,
+dashboards, workflow, approval and scoped exact serial search). Phase 6 package
+attachments below are implemented and awaiting owner acceptance. Earlier
+foundation checklists are historical planning notes, not a current phase gate.
+Official PDF, Budget/Bills and controlled correction workflows remain deferred.
+
 Priority convention:
 
 - **P0** - required for the first usable release.
@@ -187,96 +193,96 @@ Status convention:
 
 ---
 
-## 5. Phase 5 - DE/NDE + Page 3 + Attachments
+## 5. Phases 4B2 / 4C / 6 — instruments, completion details and package evidence
 
 ### DE/NDE
 
-- [ ] **P0** Finalize red ellipse/cross visual.
-- [ ] **P0** Put `DE` and `NDE` at centers.
-- [ ] **P0** Implement -1.0 to +1.0 range.
-- [ ] **P0** Implement 0.1 increment/decrement.
-- [ ] **P0** Persist readings numerically.
-- [ ] **P0** Do not add automatic acceptance/limit warnings.
+- [x] **P0** Compact circular DE/NDE instruments with B1 whole-diameter movement.
+- [x] **P0** Put `DE` and `NDE` at centers.
+- [x] **P0** Implement -1.00 to +1.00 range.
+- [x] **P0** Implement 0.01 increment/decrement.
+- [x] **P0** Persist readings numerically, including zero.
+- [x] **P0** Do not add automatic acceptance/limit warnings.
 
 ### Page 3
 
-- [ ] **P0** Implement Detailed Report by Erection Team Leader.
-- [ ] **P0** Implement Customer Comments.
-- [ ] **P0** Implement agreed signature/customer-representative strategy.
+- [x] **P0** Implement Detailed Report by Erection Team Leader.
+- [x] **P0** Implement optional Customer Comments.
+- [x] **P0** Optional direct customer signature, server timestamp; no seal/upload.
 
 ### JCC
 
-- [ ] **P0** Create one logical JCC document per overall E&C package, not per cell.
-- [ ] **P0** Accept one-page and multi-page PDF.
-- [ ] **P0** Accept approved images/photos.
-- [ ] **P0** Group multiple photographed pages as one ordered logical JCC document.
-- [ ] **P0** Exclude JCC page images from Tower Photo count/size pool.
-- [ ] **P0** Allow JCC replacement while Draft.
-- [ ] **P0** Lock supervisor replacement after submission.
-- [ ] **P0** Do not invent a JCC size cap.
+- [x] **P0** Create one logical JCC document per overall E&C package, not per cell.
+- [x] **P0** Accept one-page and multi-page PDF.
+- [x] **P0** Accept actual-content-validated JPG/JPEG/PNG pages.
+- [x] **P0** Group multiple photographed pages as one ordered logical JCC document.
+- [x] **P0** Exclude JCC page images from Tower Photo count/size pool.
+- [x] **P0** Creator owning a report may add/replace/remove/reorder while eligible.
+- [x] **P0** Any SUBMITTED/APPROVED Cell locks package-wide Supervisor mutation.
+- [x] **P0** DRAFT/REVIEWED Cells allow editing without reverting review status.
+- [x] **P0** No invented application JCC byte-size cap; no image-to-PDF conversion.
 
 ### Tower Photos
 
-- [ ] **P0** Maximum 5 photos.
-- [ ] **P0** Maximum 5 MB combined total.
-- [ ] **P0** Enforce count and aggregate size server-side.
-- [ ] **P0** Mirror validation client-side.
-- [ ] **P0** Show `n of 5` and current MB/5 MB.
-- [ ] **P0** Allow remove/replace while Draft.
-- [ ] **P0** Lock supervisor modification after submission.
+- [x] **P0** Maximum 5 photos.
+- [x] **P0** Maximum 5 MB combined total (5,000,000 original bytes).
+- [x] **P0** Enforce count and aggregate size server-side under package locks.
+- [x] **P0** Mirror validation client-side; never compress to fit.
+- [x] **P0** Show `n of 5` and current MB/5 MB.
+- [x] **P0** Allow creator add/remove/replace/reorder while package eligible.
+- [x] **P0** Lock supervisor modification after any Cell submission/approval.
 
 ### Storage service
 
-- [ ] **P0** Create storage interface independent of routes/controllers.
-- [ ] **P0** Implement local filesystem backend for development.
-- [ ] **P0** Store file metadata/storage keys in MySQL.
-- [ ] **P0** Prevent path traversal/executable uploads.
-- [ ] **P0** Protect attachment access with authorization.
+- [x] **P0** Extend protected object interface independent of routes/controllers.
+- [x] **P0** Private local backend; unchanged signature namespace.
+- [x] **P0** Store normalized file/document/order metadata in MySQL, binaries privately.
+- [x] **P0** Generated keys, content validation and no-symlink descriptor IO.
+- [x] **P0** Protect attachment access with report-derived historical authorization.
+- [x] **P0** DB commit before old-object cleanup; preserve references on failures.
+- [ ] **P1** Reviewed orphan reconciliation (no broad automatic deletion).
 - [ ] **P1** Add AWS S3/object-storage backend only if selected for production.
 
 ---
 
-## 6. Phase 6 - Review / Confirm / Submit + Approval + Audit
+## 6. Phase 5 (accepted) — Review / Confirm / Submit + Approval; Phase 6 package audit
 
-- [ ] **P0** Add Review screen.
-- [ ] **P0** Highlight missing mandatory fields.
-- [ ] **P0** Block confirmation/submission when validation fails.
-- [ ] **P0** Record `REVIEWED` as appropriate.
-- [ ] **P0** Add explicit Confirm action.
-- [ ] **P0** Set status `SUBMITTED` and submission timestamp.
-- [ ] **P0** Lock supervisor editing after submission.
-- [ ] **P0** Admin can approve submitted reports.
-- [ ] **P0** Set `APPROVED`, approving admin, and timestamp.
-- [ ] **P0** Create audit log.
-- [ ] **P0** Audit important report, attachment, submission, approval, and admin actions.
+- [x] **P0** Add Review screen.
+- [x] **P0** Highlight missing mandatory fields.
+- [x] **P0** Block confirmation/submission when validation fails.
+- [x] **P0** Record `REVIEWED` as appropriate.
+- [x] **P0** Add explicit Confirm action.
+- [x] **P0** Set status `SUBMITTED` and submission timestamp.
+- [x] **P0** Lock supervisor report/signature editing outside DRAFT.
+- [x] **P0** Admin can approve submitted reports within scope.
+- [x] **P0** Set `APPROVED`, approving admin, and timestamp.
+- [x] **P0** Transactional report audit and dedicated package attachment audit.
+- [x] **P0** Audit report edits, attachments, submission, approval and admin actions.
+- [x] **P0** JCC/Tower Photos remain optional and do not change final-required fields.
 - [ ] **P2** Do not implement Return for Correction unless separately approved.
 
 ---
 
-## 7. Phase 7 - Admin Search + Full Report Retrieval
+## 7. Phase 5 (accepted) — Admin Search + Full Report Retrieval
 
 ### Search fields
 
-- [ ] **P0** Cooling Tower Serial No.
-- [ ] **P0** Fan Serial No.
-- [ ] **P0** Drive Shaft Serial No.
-- [ ] **P0** Gearbox Serial No.
-- [ ] **P0** Motor Serial No.
-- [ ] **P0** Customer.
-- [ ] **P0** Model.
-- [ ] **P0** Date From/To.
+- [x] **P0** Cooling Tower Serial No.
+- [x] **P0** Drive Shaft Serial No.
+- [x] **P0** Gearbox Serial No.
+- [x] **P0** Motor Serial No.
+- [ ] **P2** Additional search keys (Fan, Customer, Model, dates) only if later approved.
 
 ### Behaviour
 
-- [ ] **P0** Search Cooling Tower Serial without requiring suffix.
-- [ ] **P0** If multiple towers exist, show suffix/tower choices.
-- [ ] **P0** Then show cells.
-- [ ] **P0** Single unsuffixed tower with multiple cells shows cells directly.
-- [ ] **P0** Selecting a cell opens complete report.
-- [ ] **P0** Package view exposes shared JCC and Tower Photos.
-- [ ] **P0** Equipment serial search returns associated package/tower/cell/report context.
-- [ ] **P1** Add proper MySQL indexes to all primary search columns.
-- [ ] **P1** Document exact vs partial and case-insensitive matching rules.
+- [x] **P0** Search Cooling Tower Serial without requiring suffix.
+- [x] **P0** Scoped grouped Package/Tower/Cell chooser for multiple results.
+- [x] **P0** Single authorized match opens the full report directly.
+- [x] **P0** Selecting a cell opens complete report.
+- [x] **P0** Full report links to shared JCC and Tower Photos (Phase 6).
+- [x] **P0** Equipment serial search returns associated package/tower/cell/report context.
+- [x] **P1** Dedicated indexed equipment serial columns.
+- [x] **P1** Document exact case-insensitive matching; no broad fuzzy search.
 
 ---
 
@@ -412,12 +418,8 @@ For every implementation phase:
 
 ## Immediate Next Sequence
 
-1. [ ] Run Phase 0 with the AI coder: requirements/architecture review only, no coding.
-2. [ ] Confirm MySQL version and local-development approach.
-3. [ ] Resolve password-recovery and signature questions.
-4. [ ] Approve Phase 0.
-5. [ ] Start Phase 1 only.
-6. [ ] Verify locally.
-7. [ ] User approves.
-8. [ ] Commit and push.
-9. [ ] Continue phase-by-phase through Phase 9.
+1. [x] Accepted Phases 1–5 and deployment hardening remain intact.
+2. [x] Implement Phase 6 optional Package-level JCC/Tower Photos and package audit.
+3. [ ] Owner manually verifies multi-cell lock, ordered JCC and photo limits.
+4. [ ] Owner accepts Phase 6 before any commit/push.
+5. [ ] Official PDF phase starts only after separate owner instructions.

@@ -272,7 +272,7 @@ legend { padding-inline: 0.4rem; font-weight: 750; }
 .signature-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .signature-status { min-height: 1.5rem; }
 .signature-status[data-state="error"] { color: #b91c1c; }
-.signature-actions [hidden] { display: none; }
+.signature-actions[hidden], .signature-actions [hidden] { display: none; }
 
 @media (max-width: 42rem) {
   .completion-identity { grid-template-columns: minmax(min-content, 1.3fr) auto minmax(0, 1fr); font-size: 0.875rem; }
@@ -295,3 +295,20 @@ legend { padding-inline: 0.4rem; font-weight: 750; }
   .form-grid-wide { grid-column: auto; }
   .autosave-bar { align-items: stretch; flex-direction: column; }
 }
+
+/* Package evidence shares existing form controls; previews remain compact. */
+.attachment-section { border-top: 1px solid var(--border); margin-top: 1.5rem; padding-top: 1rem; }
+.attachment-list { display: grid; gap: 1rem; padding-left: 1.25rem; }
+.attachment-item { display: grid; grid-template-columns: minmax(100px, 160px) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.attachment-preview { width: 100%; max-height: 160px; object-fit: contain; border: 1px solid var(--border); border-radius: 0.5rem; background: white; }
+.attachment-filename { overflow-wrap: anywhere; }
+.attachment-section form { margin-block: 1rem; justify-items: start; }
+.attachment-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; max-width: 100%; }
+.file-picker { position: relative; flex: 0 0 auto; width: auto; }
+.file-picker-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; clip-path: inset(50%); overflow: hidden; }
+.file-picker:focus-within { outline: .2rem solid var(--brand-accent); outline-offset: .12rem; }
+.selected-filenames { overflow-wrap: anywhere; min-width: 0; }
+.erector-summary { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--surface-muted); }
+.erector-summary .summary-list { margin-bottom: 0; }
+[data-attachment-status][data-state="error"] { color: var(--danger, #9c2020); }
+@media (max-width: 480px) { .attachment-item { grid-template-columns: 1fr; } .attachment-preview { width: 120px; } }
