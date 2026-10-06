@@ -34,4 +34,4 @@
 <section class="card"><h2>JCC and Tower Photos</h2><p>JCC and Tower Photos are shared across every Tower and Cell.</p><a class="button secondary" href="/ecr/packages/{{ report.tower.package.id }}/attachments">Attachments JCC &amp; Tower Photo</a></section>
 {% include 'ecr/action_confirmation.html' %}
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/reading_instruments.js') }}?v=1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ static_asset_url('/reading_instruments.js') }}" defer></script>{% endblock %}

@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import Response
 
 from app.auth.csrf import get_or_create_csrf_token, set_csrf_cookie
+from app.core.static_assets import static_asset_url
 
 TEMPLATE_DIRECTORY = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
@@ -21,6 +22,7 @@ def file_size(byte_size: int) -> str:
 
 
 templates.env.filters["file_size"] = file_size
+templates.env.globals["static_asset_url"] = static_asset_url
 
 
 def render_template(

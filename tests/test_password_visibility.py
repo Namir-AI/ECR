@@ -5,7 +5,7 @@ from tests.conftest import login
 
 
 def _assert_password_controls(page_text: str, field_names: tuple[str, ...]) -> None:
-    assert 'src="http://testserver/static/password_visibility.js"' in page_text
+    assert 'src="http://testserver/static/password_visibility.js?v=' in page_text
     for field_name in field_names:
         assert f'id="{field_name}" type="password" name="{field_name}"' in page_text
         assert f'data-password-target="{field_name}"' in page_text

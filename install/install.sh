@@ -90,6 +90,7 @@ if [[ ! -r "$COMMON_FILE" ]]; then
         "The local install.sh does not match the explicitly selected Git ref '$BOOTSTRAP_REF'."
     download_bootstrap_file "$bootstrap_base_url/lib/common.sh" "$temporary_common"
     download_bootstrap_file "$bootstrap_base_url/lib/env_tools.py" "$temporary_tools/lib/env_tools.py"
+    download_bootstrap_file "$bootstrap_base_url/lib/runtime_tools.py" "$temporary_tools/lib/runtime_tools.py"
     download_bootstrap_file "$bootstrap_base_url/ecr-update.sh" "$temporary_tools/ecr-update.sh"
     SCRIPT_DIR=$temporary_tools
     COMMON_FILE=$temporary_common
@@ -753,6 +754,7 @@ if [[ "$ECR_DB_TYPE" == "local" ]]; then
 fi
 
 run_db_check "$release_dir"
+run_application_import_check "$release_dir"
 installation_migration_started=true
 run_migrations "$release_dir"
 

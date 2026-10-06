@@ -241,7 +241,18 @@ sync_release_dependencies() {
         UV_CACHE_DIR="$ECR_INSTALL_DIR/shared/uv-cache" \
         UV_PYTHON_INSTALL_DIR="$ECR_INSTALL_DIR/shared/uv-python" \
         uv sync --directory "$release_dir" --frozen --no-dev \
-            --python "$ECR_PRODUCTION_PYTHON" --managed-python --no-python-downloads
+            --python "$ECR_PRODUCTION_PYTHON" --managed-python --no-python-downloads --link-mode copy || return "$?"
+    harden_application_runtime "$release_dir"
+}
+
+harden_application_runtime() {
+    local application_dir=$1 helper
+    helper="$application_dir/install/lib/runtime_tools.py"
+    if [[ -n ${SCRIPT_DIR:-} && -f "$SCRIPT_DIR/lib/runtime_tools.py" ]]; then
+        helper="$SCRIPT_DIR/lib/runtime_tools.py"
+    fi
+    [[ -f "$helper" && ! -L "$helper" ]] || die "Runtime permission helper is unavailable."
+    "$ECR_PRODUCTION_PYTHON" "$helper" "$application_dir" "$ECR_INSTALL_DIR/shared/uv-python"
 }
 
 ensure_repository() {
@@ -461,6 +472,12 @@ activate_release() {
 run_db_check() {
     local release_dir=$1
     (cd "$release_dir" && run_as_service "$release_dir/.venv/bin/python" -m app.db.check)
+}
+
+run_application_import_check() {
+    local application_dir=$1
+    log "Checking target application import as the ECR service account before migrations."
+    (cd "$application_dir" && run_as_service "$application_dir/.venv/bin/python" -c 'import app.main')
 }
 
 run_migrations() {

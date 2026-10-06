@@ -258,8 +258,9 @@ It refuses local Git changes rather than overwriting operator edits. It creates
 the mandatory database/persistent-files backup and a root-only environment
 snapshot **before stopping ECR**. While stopped, it fetches the repository,
 checks out the pinned exact commit in the **same application worktree**, runs
-`uv sync --frozen --no-dev`, upgrades/validates production config, checks DB
-connectivity and runs Alembic as the service user. It starts ECR and verifies
+`uv sync --frozen --no-dev --link-mode copy`, upgrades/validates production config,
+checks DB connectivity and imports the real `app.main` as the service user
+**before** running Alembic. It starts ECR and verifies
 local and configured HTTPS health before recording a successful deployment.
 Allow a maintenance window: frozen dependency sync and migrations cause
 downtime. There is no new release directory or `current` symlink switch per update.
@@ -273,6 +274,25 @@ umask, while launcher/bootstrap secrets remain `0077`/`0700`. Service-user
 commands use application-directory executables/helpers, **never** the private
 `/run/ecr-update.*` bootstrap. No manual production Python setup is needed.
 Run updates via `ecr-update`, not an updater inside the worktree being changed.
+
+After sync, a dedicated helper hardens only the isolated `.venv`: directories
+become traversable/readable, package files readable, and existing executable
+bits are retained without group/other write permission. Copy-mode uv installs
+avoid sharing permission changes with its cache. Legacy hardlinked files are
+atomically copied to independent virtualenv inodes before permissions change;
+cache/runtime interpreter objects and production secrets are never chmodded.
+External virtualenv symlinks are rejected except the protected managed Python
+interpreter links. Fresh installs and recovered pre-migration runtimes use the
+same service-user application import readiness check. Import failure prevents
+Alembic and enters the existing pre-migration recovery path; post-migration
+failure still never triggers automatic schema downgrade.
+
+All template CSS/JS URLs use one application-startup SHA-256 bundle version
+derived only from local CSS/JS content and relative names. Changing the deployed
+assets changes their URLs on restart, including after in-place updates. Fresh
+install, same-commit reconciliation and local development need no version env
+patch, Git executable at runtime, writable source files or per-request hashing.
+Static file serving itself is unchanged; secrets are never part of the digest.
 
 The active `current` Git worktree is authoritative, not a potentially stale
 commit in `deployment.env`. Stale metadata produces a warning and is reconciled

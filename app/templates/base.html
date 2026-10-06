@@ -5,9 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Paharpur ECR{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
-    <script src="{{ url_for('static', path='/password_visibility.js') }}" defer></script>
-    <script src="{{ url_for('static', path='/app_shell.js') }}" defer></script>
+    <link rel="stylesheet" href="{{ static_asset_url('/app.css') }}">
+    <script src="{{ static_asset_url('/password_visibility.js') }}" defer></script>
+    <script src="{{ static_asset_url('/app_shell.js') }}" defer></script>
   </head>
   <body{% if current_user %} class="authenticated-shell"{% endif %}>
     {% if current_user %}<header class="mobile-header"><a class="brand" href="/dashboard">Paharpur Service Management</a><button type="button" class="secondary" data-sidebar-toggle aria-expanded="false" aria-controls="app-sidebar" aria-label="Toggle navigation">{{ navigation_icon('menu') }}</button></header>{% endif %}

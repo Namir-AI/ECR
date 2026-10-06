@@ -28,6 +28,9 @@ recover_before_migrations() {
         sync_application_dependencies "$application_dir" || restored=false
         if [[ "$restored" == true ]]; then
             run_db_check "$application_dir" || restored=false
+            if [[ "$restored" == true ]]; then
+                run_application_import_check "$application_dir" || restored=false
+            fi
         fi
     fi
     if [[ "$restored" == true ]]; then
@@ -181,6 +184,7 @@ checkout_application_commit "$application_dir" "$new_commit"
 sync_application_dependencies "$application_dir"
 upgrade_production_env "$application_dir"
 run_db_check "$application_dir"
+run_application_import_check "$application_dir"
 
 migration_started=true
 run_migrations "$application_dir"

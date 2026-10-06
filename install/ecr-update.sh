@@ -98,7 +98,7 @@ launcher_main() (
     [[ ! -L "$bootstrap_dir/install" && ! -L "$bootstrap_dir/install/lib" ]] || \
         launcher_die "Target deployment directories must not be symlinks."
     local file
-    for file in update.sh backup.sh lib/common.sh lib/env_tools.py ecr-update.sh; do
+    for file in update.sh backup.sh lib/common.sh lib/env_tools.py lib/runtime_tools.py ecr-update.sh; do
         [[ -f "$bootstrap_dir/install/$file" && ! -L "$bootstrap_dir/install/$file" ]] || \
             launcher_die "Target commit lacks deployment tooling: $file"
     done

@@ -133,7 +133,7 @@ def test_atomic_publication_rejects_symlinks(tmp_path, field):
 
 @pytest.mark.parametrize("mode", ["fresh", "reconfigure", "repair"])
 @pytest.mark.parametrize(
-    "failure", ["db", "migration", "local", "https-setup", "https", "none"]
+    "failure", ["db", "import", "migration", "local", "https-setup", "https", "none"]
 )
 def test_installer_launcher_is_last_and_requires_health(tmp_path, mode, failure):
     tail = (
@@ -155,6 +155,7 @@ CREATE_INITIAL_ADMIN=false; deploy_commit={deployed}; ECR_GIT_REF=release
 previous_commit={Q(prior)}; previous_ref={Q(prior_ref)}; ECR_SERVICE_USER=ecr
 ECR_INSTALL_DIR={Q(str(tmp_path))}
 run_db_check() {{ echo db >>{Q(str(events))}; {"return 50" if failure == "db" else ":"}; }}
+run_application_import_check() {{ echo import >>{Q(str(events))}; {"return 50" if failure == "import" else ":"}; }}
 run_migrations() {{ echo migrate >>{Q(str(events))}; {"return 50" if failure == "migration" else ":"}; }}
 activate_release() {{ echo activate >>{Q(str(events))}; }}
 original_state=$(declare -f write_deployment_state)
@@ -175,7 +176,7 @@ git_as_deployer() {{ echo exact-target; }}
     if failure == "none":
         assert result.returncode == 0, result.stderr
         assert sequence == (
-            ["db", "migrate"]
+            ["db", "import", "migrate"]
             + ([] if mode == "repair" else ["activate"])
             + ["local", "tls-config", "https"]
             + ([] if mode == "repair" else ["state", "history"])
@@ -189,6 +190,8 @@ git_as_deployer() {{ echo exact-target; }}
             assert "ECR_PREVIOUS_RELEASE" not in values
     else:
         assert result.returncode != 0
+        if failure == "import":
+            assert sequence == ["db", "import"]
         assert "launcher" not in sequence
         assert "state" not in sequence and "history" not in sequence
         assert not (tmp_path / "state/deployment.env").exists()

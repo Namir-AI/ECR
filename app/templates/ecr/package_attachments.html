@@ -36,4 +36,4 @@
   </section>
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/package_attachments.js') }}" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ static_asset_url('/package_attachments.js') }}" defer></script>{% endblock %}

@@ -68,4 +68,4 @@
   {% if not package %}{% include "ecr/series_confirmation.html" %}{% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/new_report.js') }}" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ static_asset_url('/new_report.js') }}" defer></script><script src="{{ static_asset_url('/series_confirmation.js') }}" defer></script>{% endblock %}

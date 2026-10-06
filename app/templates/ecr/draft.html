@@ -43,4 +43,4 @@
 </section>
 <section class="card"><h2>JCC and Tower Photos</h2><p>JCC and Tower Photos are shared across every Tower and Cell.</p><a class="button secondary" href="/ecr/packages/{{ report.tower.package.id }}/attachments">Attachments JCC &amp; Tower Photo</a></section>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='/nonnegative_decimal.js') }}?v=2" defer></script><script src="{{ url_for('static', path='/series_confirmation.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/reading_instruments.js') }}?v=1" defer></script><script src="{{ url_for('static', path='/ecr_autosave.js') }}?v=7" defer></script><script src="{{ url_for('static', path='/customer_signature.js') }}?v=2" defer></script>{% endblock %}
+{% block scripts %}<script src="{{ static_asset_url('/nonnegative_decimal.js') }}" defer></script><script src="{{ static_asset_url('/series_confirmation.js') }}" defer></script><script src="{{ static_asset_url('/reading_instruments.js') }}" defer></script><script src="{{ static_asset_url('/ecr_autosave.js') }}" defer></script><script src="{{ static_asset_url('/customer_signature.js') }}" defer></script>{% endblock %}

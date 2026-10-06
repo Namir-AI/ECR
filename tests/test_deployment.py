@@ -141,6 +141,7 @@ def deployment(tmp_path):
     shutil.copytree(ROOT / "install", source / "install")
     shutil.copyfile(ROOT / ".gitignore", source / ".gitignore")
     (source / "app").mkdir()
+    (source / "app/__init__.py").write_text("")
     (source / "app/main.py").write_text("# fixture only\n")
     (source / "pyproject.toml").write_text("# fixture only\n")
     (source / "uv.lock").write_text("# fixture only\n")
@@ -276,6 +277,7 @@ https_health_check() {{ echo https >>{Q(str(events))}; }}
 sync_application_dependencies() {{ echo sync >>{Q(str(events))}; git -C "$1" rev-parse HEAD >"$1/.venv/runtime-commit"; }}
 upgrade_production_env() {{ echo env >>{Q(str(events))}; echo UPGRADED=1 >>"$ECR_INSTALL_DIR/shared/.env"; }}
 run_db_check() {{ echo db >>{Q(str(events))}; }}
+run_application_import_check() {{ echo import >>{Q(str(events))}; (cd "$1" && run_as_service "$1/.venv/bin/python" -c 'import app.main'); }}
 run_migrations() {{ echo migration >>{Q(str(events))}; }}
 original_state=$(declare -f write_deployment_state)
 eval "${{original_state/write_deployment_state/real_write_deployment_state}}"
@@ -349,6 +351,7 @@ printf '%s' {Q(str(base / "backups/pre.sql.gz"))}
                 "sync",
                 "env",
                 "db",
+                "import",
                 "migration",
                 "start",
                 "local",
@@ -545,6 +548,7 @@ append_deployment_history update new-tag {Q(target)} {Q(str(active))}
         "uv",
         "db",
         "env",
+        "import",
         "recovery",
         "migration",
         "start",
@@ -600,6 +604,9 @@ sync_release_dependencies() {{
 }}
 upgrade_production_env() {{ echo UPGRADED=1 >>"$ECR_INSTALL_DIR/shared/.env"; {"return 40" if failure == "env" else ":"}; }}
 run_db_check() {{ echo db >>{Q(str(events))}; {'if [[ $(git -C "$1" rev-parse HEAD) == ' + Q(target) + " ]]; then return 42; fi" if failure in ("db", "recovery") else ":"}; }}
+original_import=$(declare -f run_application_import_check)
+eval "${{original_import/run_application_import_check/real_run_application_import_check}}"
+run_application_import_check() {{ echo import >>{Q(str(events))}; real_run_application_import_check "$@"; }}
 run_migrations() {{ echo migration >>{Q(str(events))}; {"return 43" if failure == "migration" else ":"}; }}
 systemctl() {{ echo "$1" >>{Q(str(events))}; {"if [[ $1 == start ]]; then return 50; fi" if failure == "start" else ":"}; }}
 wait_for_local_health() {{ echo local >>{Q(str(events))}; {'if [[ $(git -C "$application_dir" rev-parse HEAD) == ' + Q(target) + " ]]; then return 44; fi" if failure == "health" else ":"}; }}
@@ -657,6 +664,14 @@ esac
         )
         env["PATH"] = f"{bins}:{os.environ['PATH']}"
     before = (base / "shared/.env").read_bytes()
+    if failure == "import":
+        # Exercise the actual target import, not merely a mocked nonzero status.
+        (deployment[1] / "app/main.py").write_text(
+            "raise ImportError('broken target application')\n"
+        )
+        git("add", ".", cwd=deployment[1])
+        git("commit", "-qm", "broken application import", cwd=deployment[1])
+        target = git("rev-parse", "HEAD", cwd=deployment[1])
     result = subprocess.run(
         ["bash", str(tooling / "update.sh"), target],
         check=False,
@@ -677,10 +692,10 @@ esac
     dirs = list((base / "releases").iterdir())
     assert dirs == [active]
     assert (base / "current").resolve() == active
-    if failure in ("uv", "db", "env", "recovery"):
+    if failure in ("uv", "db", "env", "import", "recovery"):
         assert (
             result.returncode
-            == {"uv": 41, "db": 42, "env": 40, "recovery": 42}[failure]
+            == {"uv": 41, "db": 42, "env": 40, "import": 1, "recovery": 42}[failure]
         ), result.stderr
         assert dirs == [base / "releases/old"]
         assert "migration" not in log
@@ -751,6 +766,7 @@ esac
             "stop",
             "sync",
             "db",
+            "import",
             "migration",
             "start",
             "local",
@@ -1165,7 +1181,7 @@ printf '%s' "$release"
     package = next((release / ".venv/lib").glob("python*/site-packages"))
     assert (
         package / "deployment_package_probe.py"
-    ).stat().st_ino == cache_file.stat().st_ino
+    ).stat().st_ino != cache_file.stat().st_ino
     for path, fingerprint in fingerprints.items():
         assert (
             path.read_bytes(),
@@ -1183,25 +1199,38 @@ printf '%s' "$release"
 
 
 @pytest.mark.parametrize("ref", ["commit", "main", "release-tag"])
-@pytest.mark.parametrize("broken", [False, True])
+@pytest.mark.parametrize(
+    "broken", [None, "common_missing", "runtime_missing", "runtime_symlink"]
+)
 def test_launcher_uses_target_not_current(deployment, tmp_path, broken, ref):
-    base, source, config, _old, _ = deployment
+    base, source, config, old, _ = deployment
     marker = tmp_path / "executed"
     executable(base / "current/install/update.sh", "echo OLD; exit 99\n")
-    if broken:
+    env_before = (base / "shared/.env").read_bytes()
+    persistent_before = (base / "shared/data/protected/signature.png").read_bytes()
+    service_state = tmp_path / "service-state"
+    service_state.write_text("running")
+    if broken == "common_missing":
         (source / "install/lib/common.sh").unlink()
-    else:
-        executable(
-            source / "install/update.sh",
-            f"""
+    elif broken in {"runtime_missing", "runtime_symlink"}:
+        runtime_helper = source / "install/lib/runtime_tools.py"
+        runtime_helper.unlink()
+        if broken == "runtime_symlink":
+            # A resolvable regular-file target still must not bypass ! -L.
+            runtime_helper.symlink_to("env_tools.py")
+    executable(
+        source / "install/update.sh",
+        f"""
+printf '%s' "$ECR_BOOTSTRAP_COMMIT" >{Q(str(marker))}
 [[ $(umask) == 0077 ]]
 bootstrap=$(dirname -- "$(dirname -- "${{BASH_SOURCE[0]}}")")
 [[ $(stat -c %a -- "$bootstrap") == 700 ]]
+[[ -f "$bootstrap/install/lib/runtime_tools.py" && ! -L "$bootstrap/install/lib/runtime_tools.py" ]]
 private_file=$(mktemp "$bootstrap/private.XXXXXXXX")
 [[ $(stat -c %a -- "$private_file") == 600 ]]
-printf '%s' "$ECR_BOOTSTRAP_COMMIT" >{Q(str(marker))}
+printf stopped >{Q(str(service_state))}
 """,
-        )
+    )
     git("add", ".", cwd=source)
     git("commit", "-qm", "new target tooling", cwd=source)
     target = git("rev-parse", "HEAD", cwd=source)
@@ -1223,6 +1252,19 @@ launcher_main {Q(requested)}
     if broken:
         assert result.returncode != 0
         assert not marker.exists()
+        expected = (
+            "lib/common.sh" if broken == "common_missing" else "lib/runtime_tools.py"
+        )
+        assert f"Target commit lacks deployment tooling: {expected}" in result.stderr
+        assert "Running target deployment tooling" not in result.stderr
+        assert service_state.read_text() == "running"
+        assert git("rev-parse", "HEAD", cwd=base / "current") == old
+        assert (base / "shared/.env").read_bytes() == env_before
+        assert (
+            base / "shared/data/protected/signature.png"
+        ).read_bytes() == persistent_before
+        assert not list((base / "backups").iterdir())
+        assert not list((base / "state").iterdir())
     else:
         assert result.returncode == 0, result.stderr
         assert marker.read_text() == target
@@ -1264,6 +1306,10 @@ def test_launcher_updates_existing_worktree_with_no_private_service_paths(
     (source / "app/core").mkdir()
     (source / "app/__init__.py").write_text("")
     (source / "app/core/__init__.py").write_text("")
+    (source / "app/main.py").write_text(
+        "import os\nwith open(os.environ['ECR_TEST_EVENTS'], 'a') as stream:\n"
+        "    stream.write('application-import\\n')\n"
+    )
     shutil.copyfile(ROOT / "app/core/config.py", source / "app/core/config.py")
     (source / "app/db").mkdir()
     (source / "app/db/__init__.py").write_text("")
@@ -1385,6 +1431,7 @@ launcher_main {Q(requested)}
         "stop",
         "uv-sync",
         "db-check",
+        "application-import",
         "migration",
         "start",
         "local",
@@ -1394,6 +1441,7 @@ launcher_main {Q(requested)}
     service_calls = commands.read_text().splitlines()
     assert any("env_tools.py validate" in call for call in service_calls)
     assert any("-m app.db.check" in call for call in service_calls)
+    assert any("-c import app.main" in call for call in service_calls)
     assert any("alembic upgrade head" in call for call in service_calls)
     assert all(
         "/run/ecr-update." not in call and "/bootstrap." not in call
@@ -1826,5 +1874,6 @@ cp {Q(str(ROOT / "install"))}/"$path" "$destination"
         "install.sh",
         "lib/common.sh",
         "lib/env_tools.py",
+        "lib/runtime_tools.py",
         "ecr-update.sh",
     ]
