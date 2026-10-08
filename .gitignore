@@ -18,3 +18,5 @@ build/
 dist/
 
 var/
+
+AI_CODER_PROMPT.md
