@@ -16,12 +16,14 @@ STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
 def create_app(settings: AppSettings | None = None) -> FastAPI:
     """Create the FastAPI application without opening external connections."""
     resolved_settings = settings or get_app_settings()
+    documentation_enabled = resolved_settings.app_env != "production"
     application = FastAPI(
         title=resolved_settings.app_name,
         version="0.1.0",
         debug=resolved_settings.app_debug,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if documentation_enabled else None,
+        redoc_url="/redoc" if documentation_enabled else None,
+        openapi_url="/openapi.json" if documentation_enabled else None,
     )
     application.state.settings = resolved_settings
     application.state.static_asset_version = static_bundle_version(STATIC_DIRECTORY)

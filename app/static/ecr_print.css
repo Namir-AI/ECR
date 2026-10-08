@@ -1,0 +1,71 @@
+/* ONE Letter layout for browser print and WeasyPrint. No application shell. */
+@page { size: Letter portrait; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: "DejaVu Sans", sans-serif; color: #000; }
+body { background: #e4e7eb; font-size: 9pt; }
+.sheet { width: 8.5in; height: 11in; padding: 24pt 48pt 42pt; position: relative; background: #fff; margin: 18pt auto; break-after: page; }
+.sheet:last-child { break-after: auto; }
+.format-code { text-align: right; font-size: 7.5pt; line-height: 10pt; }
+.company-header { display: flex; gap: 16pt; align-items: center; margin: 6pt 0 14pt; }
+.company-header h1 { font-size: 13pt; margin: 0 0 4pt; }
+.company-header p { font-size: 8pt; line-height: 11pt; margin: 0; }
+.company-logo { width: 95pt; flex: 0 0 95pt; text-align: center; }
+.company-logo img { width: 90pt; height: auto; }
+.company-logo strong { display: block; font-size: 6.5pt; margin-top: 4pt; }
+.official-title { font-size: 10.5pt; text-align: center; border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000; padding: 3pt 0; margin: 6pt 0; line-height: 14pt; }
+.report-status { text-align: right; font-size: 8pt; font-weight: bold; margin: 4pt 0; }
+.report-status.unsubmitted { font-size: 11pt; text-align: center; border: 1pt solid #555; padding: 3pt; letter-spacing: .5pt; }
+table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+th { text-align: left; font-weight: normal; }
+.identification { font-size: 8pt; line-height: 10pt; margin-bottom: 8pt; }
+.identification th { width: 142pt; font-weight: bold; padding: 1pt 6pt 1pt 0; }
+.identification td { padding: 1pt 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.technical-title { font-size: 10pt; text-align: center; border: .75pt solid #000; padding: 3pt; margin: 8pt 0 4pt; }
+.pair { display: flex; gap: 22pt; align-items: flex-start; margin: 8pt 0 14pt; }
+.pair > * { flex: 0 0 247pt; width: 247pt; min-width: 0; }
+h3 { font-size: 9pt; text-decoration: underline; margin: 0 0 8pt; line-height: 12pt; }
+.fields { font-size: 7.8pt; line-height: 10pt; }
+.fields th { width: 53%; padding: 2pt 5pt 2pt 0; vertical-align: top; }
+.fields td { border: .5pt solid #555; height: 14pt; padding: 1pt 3pt; vertical-align: top; overflow-wrap: anywhere; white-space: pre-wrap; }
+.blade-cell { padding: 0 !important; }
+.blade-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.blade-grid span { border: .25pt solid #555; height: 13pt; padding: 1pt 2pt; font-size: 7pt; }
+small { font-size: 6.5pt; }
+.running { display: flex; justify-content: space-between; font-size: 7.5pt; line-height: 11pt; margin-bottom: 12pt; }
+.running > span { max-width: 280pt; overflow-wrap: anywhere; }
+.running > span:last-child { text-align: right; }
+.core-page[data-page="2"] .pair { margin: 8pt 0 8pt; }
+.belt-oil .equipment + .equipment { margin-top: 22pt; }
+.torque-section { margin-top: 12pt; }
+.torque { font-size: 7.5pt; line-height: 11pt; }
+.torque th, .torque td { border: .6pt solid #000; padding: 2pt; height: 16pt; overflow-wrap: anywhere; }
+.torque th { text-align: center; }
+.torque thead tr:first-child th { height: 30pt; }
+.torque .continuation-notice td { height: 12pt; font-size: 6.5pt; padding: 1pt 3pt; border: 0; }
+.alignment-summary { margin-top: 12pt !important; margin-bottom: 4pt !important; }
+.alignment-summary h3 { min-height: 25pt; }
+.alignment-pair { margin-top: 4pt !important; }
+.print-instrument h3 { text-align: center; margin: 0; }
+.print-instrument svg { width: 210pt; height: 142pt; display: block; margin: 0 auto; }
+.team-heading { font-size: 11pt; text-align: center; margin: 12pt 0 8pt; }
+.ruled-text .text-line { height: 14pt; border-bottom: .4pt solid #999; }
+.team-report { height: 406pt; border: .5pt solid #777; padding: 3pt; }
+.text-line { font-size: 9pt; line-height: 14pt; white-space: pre; }
+.completion-pair { margin-top: 12pt; }
+.completion-pair h3 { text-decoration: none; font-size: 9pt; margin-bottom: 4pt; }
+.supervisor-identity p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 9pt; margin: 0 0 20pt; }
+.customer-comment { min-height: 84pt; }
+.sign-box { height: 58pt; border-bottom: .5pt solid #777; }
+.customer-sign { display: block; max-width: 235pt; max-height: 56pt; width: auto; height: auto; }
+.sign-date { font-size: 8pt; margin: 6pt 0 0; }
+.continuation-heading { margin: 18pt 0 12pt; overflow-wrap: anywhere; }
+.continuation-text .text-line { line-height: 12pt; }
+.page-footer { position: absolute; bottom: 20pt; left: 48pt; right: 48pt; text-align: center; font-size: 8pt; }
+.print-controls { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 14px; }
+.print-controls a, .print-controls button { font: inherit; text-decoration: none; background: #5187c0; color: white; border: 0; padding: 9px 14px; cursor: pointer; }
+.print-controls a:focus-visible, .print-controls button:focus-visible { outline: 3px solid #f76a00; outline-offset: 3px; }
+@media print {
+  html, body { background: #fff; }
+  .sheet { margin: 0; }
+  .print-controls { display: none !important; }
+}

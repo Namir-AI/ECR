@@ -89,7 +89,7 @@ def test_first_selection_needs_no_confirmation_and_creates_normally(draft_browse
     page, _ = draft_browser
     page.goto(page.url.split("/ecr/")[0] + "/ecr/reports/new")
     page.locator('[name="cooling_tower_serial_no"]').fill(f"MODAL-{uuid4().hex[:12]}")
-    page.get_by_role("button", name="Check Package").click()
+    page.get_by_role("button", name="Start Report").click()
     series = page.locator('[name="cooling_tower_series"]')
     assert series.input_value() == ""
     series.select_option("CF-I")

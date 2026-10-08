@@ -136,6 +136,9 @@ def transition(db, report, actor, action):
     elif action == "back-to-edit":
         report.reviewed_at = None  # Re-editing invalidates the previous review.
     elif action == "submit":
+        # Official identity is immutable after submission; never supplied by a form.
+        report.supervisor_name_snapshot = report.supervisor.full_name
+        report.supervisor_employee_id_snapshot = report.supervisor.employee_id
         report.submitted_at = now
     else:
         report.approved_at = now

@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% from "components/password_field.html" import password_field %}
+{% from "components/action_link.html" import action_link %}
 {% block title %}Create Branch Admin — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card auth-card">
-  <div class="heading-row"><h1>Create Branch Admin</h1><a href="/admin/users">← Back</a></div>
+  <div class="heading-row action-heading"><h1>Create Branch Admin</h1>{{ action_link('/admin/users', 'Back', 'arrow-left') }}</div>
   <p>The account is activated immediately and must change its temporary password at first login.</p>
   <form method="post" action="/admin/users/create-branch-admin">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

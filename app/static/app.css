@@ -62,6 +62,7 @@ a { color: var(--brand-link); }
 .authenticated-shell .page-shell { width: calc(100% - 2rem); max-width: 96rem; }
 .app-sidebar { position: fixed; inset: 0 auto 0 0; width: 14rem; padding: 1.2rem .8rem; overflow-y: auto; background: #f6fbff; border-right: 1px solid #d7e6f3; z-index: 20; }
 .logo-link { display: grid; justify-items: center; gap: .4rem; color: #163f72; text-decoration: none; font-size: .85rem; margin-bottom: 1.5rem; }
+.logo-link .product-name { font-size: 1rem; font-weight: 800; line-height: 1.35; }
 .paharpur-logo { width: 9rem; height: auto; object-fit: contain; }
 .app-sidebar .primary-nav { display: flex; flex-direction: column; align-items: stretch; gap: .3rem; }
 .app-sidebar .nav-item { white-space: normal; line-height: 1.25; color: #163f72; padding: .7rem .6rem; }
@@ -156,6 +157,14 @@ button, .button { display: inline-flex; align-items: center; justify-content: ce
 .password-icon { width: 1.35rem; height: 1.35rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .password-icon[hidden] { display: none; }
 .secondary { color: var(--brand-link); background: white; }
+.action-button { gap: .45rem; width: fit-content; max-width: 100%; flex-shrink: 0; align-self: flex-start; line-height: 1.3; white-space: normal; text-align: center; }
+.action-button span { min-width: 0; }
+.action-button .nav-icon { margin-right: 0; }
+.action-button.action-primary:hover { color: white; background: var(--brand-link); border-color: var(--brand-link); }
+.action-button.secondary:hover { color: var(--brand-link); background: #edf5ff; border-color: var(--brand-link); }
+.action-heading { flex-wrap: wrap; margin-bottom: .75rem; }
+.action-heading > :first-child { min-width: 0; }
+.action-heading h1 { overflow-wrap: anywhere; }
 .danger { border-color: #b91c1c; color: white; background: #b91c1c; }
 
 .alert { margin-bottom: 1rem; padding: 0.8rem 1rem; border-radius: 0.4rem; }

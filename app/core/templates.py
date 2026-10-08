@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 from app.auth.csrf import get_or_create_csrf_token, set_csrf_cookie
 from app.core.static_assets import static_asset_url
+from app.ecr.print_features import server_pdf_enabled
 
 TEMPLATE_DIRECTORY = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIRECTORY))
@@ -23,6 +24,7 @@ def file_size(byte_size: int) -> str:
 
 templates.env.filters["file_size"] = file_size
 templates.env.globals["static_asset_url"] = static_asset_url
+templates.env.globals["server_pdf_enabled"] = server_pdf_enabled
 
 
 def render_template(

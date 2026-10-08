@@ -2,6 +2,10 @@
 <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
   {% if name == "menu" %}
     <path d="M3 6h18M3 12h18M3 18h18"></path>
+  {% elif name == "arrow-left" %}
+    <path d="m10 5-7 7 7 7M3 12h18"></path>
+  {% elif name == "printer" %}
+    <path d="M7 8V3h10v5M7 17H4V8h16v9h-3"></path><path d="M7 14h10v7H7zM16 11h1"></path>
   {% elif name == "budget" %}
     <path d="M4 20V12h4v8m4 0V8h4v12m4 0V4h2v16M2 20h21"></path>
   {% elif name == "bills" %}

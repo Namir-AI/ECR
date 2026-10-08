@@ -12,7 +12,7 @@
   <body{% if current_user %} class="authenticated-shell"{% endif %}>
     {% if current_user %}<header class="mobile-header"><a class="brand" href="/dashboard">Paharpur Service Management</a><button type="button" class="secondary" data-sidebar-toggle aria-expanded="false" aria-controls="app-sidebar" aria-label="Toggle navigation">{{ navigation_icon('menu') }}</button></header>{% endif %}
     <header id="app-sidebar" class="{{ 'app-sidebar' if current_user else 'site-header' }}">
-      {% if current_user %}<a class="logo-link" href="/dashboard"><img class="paharpur-logo" src="{{ url_for('static', path='/brand/paharpur-logo.png') }}" alt="Paharpur"><span>Service Management</span></a>{% else %}<a class="brand" href="/">Paharpur Service Management</a>{% endif %}
+      {% if current_user %}<a class="logo-link" href="/dashboard"><img class="paharpur-logo" src="{{ url_for('static', path='/brand/paharpur-logo.png') }}" alt="Paharpur"><strong class="product-name">Service Management</strong></a>{% else %}<a class="brand" href="/">Paharpur Service Management</a>{% endif %}
       {% if current_user %}
         {% set current_path = request.url.path %}
         <nav class="primary-nav" aria-label="Primary navigation">

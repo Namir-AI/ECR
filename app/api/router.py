@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from app.api import health, pages
 from app.auth import routes as auth_routes
 from app.branches import routes as branch_routes
-from app.ecr import attachment_routes, operational_routes
+from app.ecr import attachment_routes, operational_routes, print_routes
 from app.ecr import routes as ecr_routes
 from app.users import routes as user_routes
 
@@ -18,3 +18,4 @@ api_router.include_router(branch_routes.router)
 api_router.include_router(operational_routes.router)
 api_router.include_router(ecr_routes.router)
 api_router.include_router(attachment_routes.router)
+api_router.include_router(print_routes.router)

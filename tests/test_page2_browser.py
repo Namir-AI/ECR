@@ -37,7 +37,7 @@ def test_creation_series_list_exact_and_blank(draft_browser):
     page, _ = draft_browser
     page.goto(page.url.split("/ecr/")[0] + "/ecr/reports/new")
     page.locator('[name="cooling_tower_serial_no"]').fill("BROWSER-NEW-SERIES")
-    page.get_by_role("button", name="Check Package").click()
+    page.get_by_role("button", name="Start Report").click()
     control = page.locator('[name="cooling_tower_series"]')
     assert control.input_value() == ""
     assert control.locator("option").evaluate_all("els => els.map(el => el.value)") == [

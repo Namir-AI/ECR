@@ -8,8 +8,8 @@ ECR module only. Budget and Bill modules are not implemented.
 
 Current implemented scope: Phases 1–5 (technical Pages 1–3, optional customer
 signature, dashboards, Review/Submit/Approval and scoped exact serial search),
-plus Phase 6 package attachments pending owner acceptance. Official PDF remains
-deferred. Earlier phase sections describe their migration history, not missing
+and accepted Phase 6 package attachments. Phase 8B official browser Print / Save
+as PDF is accepted. Earlier sections describe migration history, not missing
 current workflow/search functionality.
 
 ## Local prerequisites
@@ -49,6 +49,10 @@ or Git. The `.env` file is ignored by Git.
 
 Configuration uses individual `DB_*` values so passwords containing special
 characters do not need manual URL escaping.
+
+The existing `APP_ENV` setting controls FastAPI API documentation. Development
+keeps `/docs`, `/redoc`, and `/openapi.json` available. In production, these
+routes are disabled and return HTTP 404; `/health` remains available unchanged.
 
 ## Run locally
 
@@ -303,7 +307,7 @@ pytest
 Downgrade drops Batch A+B data only. Back up populated data before any deliberate
 downgrade; accepted Page 1, identity, users and branch tables are not modified.
 Workflow/search are implemented in Phase 5 and attachments in Phase 6.
-PDF, final Gearbox lists and controlled post-submission Current Drawn correction
+Combined PDF dossier, final Gearbox lists and controlled post-submission Current Drawn correction
 remain deferred.
 
 Browser regressions use optional Playwright/Chromium tooling, separate from the
@@ -319,7 +323,8 @@ ECR_BROWSER_HEADED=1 PYTHONPATH="$PLAYWRIGHT_SITE" pytest tests/test_page1_brows
 
 Without that optional tooling, pytest reports browser modules as skipped.
 Phase 5 implements submission/approval and serial search; Phase 6 implements
-attachments. Official PDF remains deferred.
+attachments. Official browser Print / Save as PDF is accepted in Phase 8B;
+server PDF remains dormant.
 
 ## Phase 4B2 — Page 2 Batch C
 
@@ -364,7 +369,7 @@ and obtain explicit approval before any deliberate downgrade. Existing Page 1,
 Page 2 A+B, identity, users and branches are preserved.
 
 Workflow/search and attachments are now implemented in Phases 5 and 6.
-Deferred: official PDF, final Gearbox Series/Ratio lists, audited post-submission
+Deferred: combined PDF dossier, final Gearbox Series/Ratio lists, audited post-submission
 Current Drawn correction, and audited Superadmin shared-Series correction.
 
 ## Phase 4C — Page 3 + optional customer signature
@@ -380,8 +385,8 @@ the Page-3 snapshot marker do not erase Page-3 text or signatures.
 
 **Erected / Commissioned by** and **Name (in Block Letters)** are read-only,
 derived from the report's Supervisor, with the latter presented in uppercase.
-No separate editable identity is stored. At future submission, historical display
-identity may need a snapshot; that workflow is not implemented here.
+No separate editable identity is stored. Phase 8B now snapshots the Supervisor's
+name and Employee ID at submission for official Print/PDF (see below).
 
 Customer Sign is optional. Sign using finger/stylus/mouse, then explicitly
 choose **Save Sign**. **Save now does not save an unsaved sign**. The
@@ -437,7 +442,7 @@ Downgrade removes Page-3 data, not existing Page-1/2 reports or private files.
 Back up populated data and obtain approval before a deliberate downgrade.
 Phase 5 locks normal Supervisor signature changes outside DRAFT and implements
 Review/Confirm/Submit, Approval and search. Phase 6 adds JCC/Tower Photos.
-PDF, final Gearbox lists, controlled Current Drawn correction and audited
+Combined PDF dossier, final Gearbox lists, controlled Current Drawn correction and audited
 shared-Series correction remain deferred.
 
 ## Phase 5 — operational dashboards, workflow, search and approval
@@ -504,11 +509,12 @@ data. Downgrade removes workflow/audit metadata and refuses unresolved NULL
 completion dates rather than fabricating dates. Back up populated data before
 any deliberate downgrade. Existing Page-1/2/3 content is preserved.
 
-Deferred: PDF, Budget/Bills, final Gearbox lookup lists,
+Official Print/PDF and submission snapshots are implemented in Phase 8B below.
+Deferred: Budget/Bills, final Gearbox lookup lists,
 controlled post-approval Current Drawn correction, audited shared-Series
-correction, and historical display-name snapshot policy for official records.
+correction.
 
-## Phase 6 — package attachments (JCC + Tower Photos)
+## Phase 6 (accepted) — package attachments (JCC + Tower Photos)
 
 Migration `6a2c9e4f107b` follows `5e7a2d9c104b`. It adds
 `ecr_jcc_documents`, `ecr_package_attachments` and `ecr_package_audit_events`.
@@ -577,3 +583,108 @@ requires operator review. Do not downgrade populated production data for testing
 
 Verification: `pytest` (optional Playwright/Chromium browser setup above),
 `alembic upgrade head`, `alembic check`, Python compilation and changed-file Ruff.
+
+## Phase 8B — official browser Print / Save as PDF (accepted)
+
+The active owner-approved output is **Print → browser print dialog → physical
+printer or Chrome/Edge Save as PDF**. Server PDF is retained but dormant with
+`SERVER_PDF_ENABLED = False`: its route returns 404 before evidence/rendering work
+and Download PDF links are hidden. Re-enabling requires separate owner approval.
+The authoritative print document title suggests `<Operational Serial> <Place of
+Installation> ECR.pdf` (without Cell No.); unsafe title characters are sanitized
+for this suggestion only, never for stored or printed installation values.
+
+Open **Print** from the full read-only report. The protected
+`/ecr/reports/{id}/print` and `/pdf` routes use the existing own-Supervisor,
+historical Branch Admin and global Superadmin visibility rules for every status.
+One selected Cell's structured MySQL data feeds one presentation model, one
+official Jinja template and one CSS source. No workflow state changes, screenshots,
+reference-PDF backgrounds, public PDF files or persistent PDF records are used.
+JCC/Tower Photos are **excluded**; a combined dossier remains deferred.
+
+The official core is **US Letter portrait (612 × 792 pt)**, with `1 of 3`,
+`2 of 3`, `3 of 3` numbering. Operational Serial + explicit Cell No. identify
+every page. Draft/Reviewed output prominently says **NOT SUBMITTED**; Submitted
+and Approved are distinctly labelled, without invented seals/approval signatures.
+The existing authorized logo is embedded at modest size, not extracted artwork.
+
+Continuation policy (presentation only, never a database/engineering limit):
+
+- First 8 ordered blade serials and first 4 torque rows **per category** fit the
+  core. Extra entries appear on labelled, independently numbered continuations.
+- Narrative text is conservatively wrapped using installed DejaVu Sans metrics,
+  with a 12% width reserve. Core Detailed Report allows 28 lines at 9 pt/14 pt
+  leading, Customer Comment 6 lines. Wider/longer text uses **See Continuation**,
+  and the **complete text** is printed on continuation sheets (44 lines/sheet at
+  9 pt/12 pt leading). Paragraph breaks remain; tabs use four-column tab stops.
+- Overlong scalar values are also moved intact to a named continuation rather
+  than clipped or shrunk. Optional blanks, zero, False/NULL and Series N/A remain
+  distinct. Unknown legacy Series does not fabricate N/A or expose hidden data.
+- DE/NDE uses server-generated red ellipse/cross SVG and the unchanged B1 visual
+  projection; readings print to two decimals and retain the stored shared unit.
+  Each projected axis requires both paired readings: an incomplete pair is
+  neutrally positioned with missing labels blank; explicit zero is a real reading.
+  Per-row torque and OAL units are printed without conversion.
+
+Migration `8b3f1a7c902d` follows `6a2c9e4f107b`, adding only nullable Supervisor
+name (150) / Employee-ID (50) snapshots. Submission copies authoritative User
+identity atomically with status/timestamp/audit. Approval/editing does not replace
+it. Legacy SUBMITTED/APPROVED rows are backfilled from the **current** related
+User, the best available value (not a reconstruction of past profile history).
+Draft/Reviewed remain NULL. Missing historical snapshots fail official output
+explicitly, without a live-name fallback. Disposable migration tests exercise
+upgrade/backfill/downgrade/upgrade; never downgrade populated production to test.
+
+Customer Sign stays private, is embedded once, and prints **Sign Date** in
+Asia/Kolkata (`DD-MM-YYYY HH:MM IST`). No seal is rendered. Missing/corrupt
+referenced evidence fails output rather than silently dropping a saved sign.
+
+### Dormant server PDF runtime and later production provisioning review
+
+WeasyPrint **70.0** is pinned in `pyproject.toml`/`uv.lock`. The same HTML/CSS is
+rendered in a short-lived Python worker, not Chromium: one PDF at a time **per
+application process**, 90-second wall timeout, 60-second CPU limit and 768 MiB
+address-space limit. Busy/unavailable renderers return a clear 503. The worker
+receives no production environment secrets; its resource fetcher accepts only
+exact registered in-memory PNG assets, never arbitrary HTTP/file URLs. PDFs stay
+in memory and use private/no-store, nosniff and safe download filenames.
+
+Both **Ubuntu 24.04 (noble)** and **26.04 (resolute)** provide the required native
+package names: `libpango-1.0-0`, `libpangoft2-1.0-0`, `libharfbuzz0b`,
+`libharfbuzz-subset0`; install `fonts-dejavu-core` for the selected open font and
+`fontconfig` for font discovery. Their dependencies provide GLib/FreeType/libffi.
+`uv` installs Python wheels; system Python/pip is not the application runtime.
+If wheels cannot be used, the upstream build prerequisites additionally include
+`libffi-dev`, `libjpeg-dev`, `libopenjp2-7-dev`.
+See [WeasyPrint's Ubuntu installation guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#ubuntu-20-04)
+and the [Ubuntu 24.04](https://packages.ubuntu.com/noble/libpangoft2-1.0-0) /
+[26.04](https://packages.ubuntu.com/resolute/amd64/libs/libpango-1.0-0) package indexes.
+
+Local Pango 1.52.1 and DejaVu Sans were verified; the local HarfBuzz-Subset library
+is absent, so WeasyPrint 70 uses its existing FontTools fallback (and warns).
+Include HarfBuzz-Subset in later production provisioning. **AWS has not been
+inspected or changed**; whether it needs one-time provisioning must be checked
+before deployment. Deployment scripts are unchanged in Phase 8B.
+
+Production font availability and existing production environment validation
+remain pre-deployment prerequisites, even while server PDF is disabled.
+
+Browser print: choose Letter portrait, 100% scale, disable browser-added
+headers/footers. Screen controls/sidebar/application footer are not printed.
+Automated tests cover shared geometry/print media, parsed Letter PDF pages,
+continuations, snapshots, signature privacy, malicious plain text and scope.
+Local sample PDFs are non-committed owner-review artifacts under `/tmp`.
+
+## Future Enhancements — Planned / Not Yet Implemented
+
+The current application remains focused on the accepted ECR module.
+
+- **Budget Management:** service-job/site budgeting, preparation, approval and
+  tracking, with actual-versus-budget comparison where appropriate. Detailed
+  scope must be defined separately before implementation.
+- **Erector / Supervisor Billing:** service-related bill preparation, review and
+  tracking. Detailed workflow, commercial rules and authorization must be defined
+  separately before implementation.
+
+Neither module has business tables, routes, screens, workflows or calculations;
+the existing Budget/Bills navigation entries remain coming-soon placeholders.

@@ -2,11 +2,11 @@
 
 This TODO tracks implementation of the digital Erection & Commissioning Report application.
 
-Current delivery state: Phases 1–5 are accepted (Pages 1–3, optional signature,
-dashboards, workflow, approval and scoped exact serial search). Phase 6 package
-attachments below are implemented and awaiting owner acceptance. Earlier
+Current delivery state: Phases 1–6 are accepted (Pages 1–3, optional signature,
+dashboards, workflow, approval, scoped serial/Erector search and package
+attachments). Phase 8B official browser Print / Save as PDF is accepted. Earlier
 foundation checklists are historical planning notes, not a current phase gate.
-Official PDF, Budget/Bills and controlled correction workflows remain deferred.
+Budget/Bills, combined PDF dossier and controlled correction workflows remain deferred.
 
 Priority convention:
 
@@ -286,20 +286,22 @@ Status convention:
 
 ---
 
-## 8. Phase 8 - Official Print/PDF + Full Integration Testing
+## 8. Phase 8B (accepted) - Official Print/PDF + Full Integration Testing
 
 ### Print/PDF
 
-- [ ] **P0** Recreate official page 1 layout.
-- [ ] **P0** Recreate official page 2 layout.
-- [ ] **P0** Recreate official page 3 layout.
-- [ ] **P0** Populate output from structured MySQL data.
-- [ ] **P0** Render tower suffix only when applicable.
-- [ ] **P0** Render correct cell identity.
-- [ ] **P0** Render DE/NDE graphics/readings.
-- [ ] **P0** Handle long comments and optional blanks.
-- [ ] **P0** Generate browser print view.
-- [ ] **P0** Generate PDF.
+- [x] **P0** Recreate official Pages 1–3 in US Letter portrait, not A4.
+- [x] **P0** One ViewModel/Jinja/CSS from structured MySQL, shared browser/dormant WeasyPrint PDF.
+- [x] **P0** Operational suffix + explicit Cell No., including above 10.
+- [x] **P0** Server-rendered red DE/NDE SVG, unchanged B1 projection/units.
+- [x] **P0** Blanks/zero/No/N/A and intact, separately numbered continuations.
+- [x] **P0** Protected browser Print; Chrome/Edge Save as PDF is the approved PDF path.
+- [x] **P0** Keep server PDF dormant (`SERVER_PDF_ENABLED = False`); route 404, download links hidden.
+- [x] **P0** Immutable submission identity snapshots; best-available legacy backfill.
+- [x] **P0** Customer Sign once, Sign Date IST, no seal/JCC/photos in official PDF.
+- [x] **P0** Owner completed final Phase-8B visual/code review and acceptance.
+- [x] **P0** Production FastAPI `/docs`, `/redoc` and `/openapi.json` disabled.
+- [ ] **P1** Production font/environment verification and separate dormant-renderer native-library provisioning review before deployment.
 
 ### Integration tests
 
@@ -404,6 +406,8 @@ For every implementation phase:
 
 ## 13. Future Enhancements
 
+- [ ] **P2** **Budget Management — Planned / Not Yet Implemented:** service-job/site budget preparation, approval, tracking and actual-versus-budget comparison where appropriate; detailed scope must be defined separately.
+- [ ] **P2** **Erector / Supervisor Billing — Planned / Not Yet Implemented:** service bill preparation, review and tracking; workflow, commercial rules and authorization must be defined separately.
 - [ ] **P2** Native Android app using the same FastAPI API.
 - [ ] **P2** Offline Android Draft storage and synchronization.
 - [ ] **P2** Component installation/replacement history.
@@ -420,6 +424,8 @@ For every implementation phase:
 
 1. [x] Accepted Phases 1–5 and deployment hardening remain intact.
 2. [x] Implement Phase 6 optional Package-level JCC/Tower Photos and package audit.
-3. [ ] Owner manually verifies multi-cell lock, ordered JCC and photo limits.
-4. [ ] Owner accepts Phase 6 before any commit/push.
-5. [ ] Official PDF phase starts only after separate owner instructions.
+3. [x] Owner manually verified multi-cell lock, ordered JCC and photo limits.
+4. [x] Owner accepted Phase 6; production checkpoint includes deployment hardening.
+5. [x] Phase 8A audit and Phase 8B owner implementation decisions received.
+6. [x] Owner completed final Phase-8B official layout/sample output and cumulative code review; Phase 8B accepted.
+7. [ ] AWS pre-deployment font/environment and native-dependency verification; no deployment during commit/push.

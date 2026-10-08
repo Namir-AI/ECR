@@ -1,0 +1,4 @@
+{% from "components/navigation_icon.html" import navigation_icon %}
+{% macro action_link(href, label, icon, primary=false) -%}
+<a class="button action-button {{ 'action-primary' if primary else 'secondary' }}" href="{{ href }}">{{ navigation_icon(icon) }}<span>{{ label }}</span></a>
+{%- endmacro %}

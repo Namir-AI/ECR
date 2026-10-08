@@ -1,0 +1,68 @@
+{% macro fields(section) -%}
+<section class="equipment"><h3>{{ section.name }}</h3><table class="fields"><tbody>
+{% for field in section.fields %}<tr><th scope="row">{{ field.label }}</th><td>{{ field.value }}</td></tr>{% endfor %}
+</tbody></table></section>
+{%- endmacro %}
+{% macro running(page) -%}
+<header class="running"><span>Paharpur Sl.No.: {{ vm.serial }}<br>Cell No.: {{ vm.cell }}</span><span>FORMAT NO.: HO/ENGG/EREC/01<br>ISSUE: 0</span></header>
+<div class="report-status {{ 'unsubmitted' if vm.status in ('DRAFT', 'REVIEWED') else '' }}">{{ vm.status_label }}</div>
+{%- endmacro %}
+{% macro footer(label) -%}<footer class="page-footer">{{ label }}</footer>{%- endmacro %}
+{% macro lines(values) -%}{% for line in values %}<div class="text-line">{{ line or '\u00a0' }}</div>{% endfor %}{%- endmacro %}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ vm.browser_document_title }}</title>
+{% if pdf %}<style>{{ print_css }}</style>{% else %}<link rel="stylesheet" href="{{ static_asset_url('/ecr_print.css') }}">{% endif %}
+</head><body>
+{% if not pdf %}<nav class="print-controls" aria-label="Print controls"><a href="{{ back_url }}">Back to Report</a><button type="button" onclick="window.print()">Print</button>{% if server_pdf_enabled() %}<a href="/ecr/reports/{{ vm.report_id }}/pdf">Download PDF</a>{% endif %}</nav>{% endif %}
+<main aria-label="Official ECR report">
+<article class="sheet core-page" data-page="1">
+<div class="format-code">FORMAT NO.: HO/ENGG/EREC/01<br>ISSUE: 0</div>
+<header class="company-header"><div class="company-logo"><img src="{{ logo_uri }}" alt="Paharpur"><strong>AN ISO 9001 COMPANY</strong></div><div><h1>PAHARPUR COOLING TOWERS LIMITED</h1><p>Paharpur House, 8/1/B Diamond Harbour Road,<br>Kolkata 700 027, INDIA<br>Phone: +91-33-40133000 &nbsp; Fax: +91-33-40133499<br>E-Mail: pctccu@paharpur.com &nbsp; Website: www.paharpur.com</p></div></header>
+<h2 class="official-title">ERECTION &amp; COMMISSIONING COMPLETION REPORT</h2>
+<div class="report-status {{ 'unsubmitted' if vm.status in ('DRAFT', 'REVIEWED') else '' }}">{{ vm.status_label }}</div>
+<table class="identification"><tbody>{% for field in vm.identity %}<tr><th scope="row">{{ field.label }}</th><td>{{ field.value }}</td></tr>{% endfor %}</tbody></table>
+<h2 class="technical-title">TECHNICAL DATA</h2>
+<div class="pair first-equipment">
+{{ fields(vm.page1_sections[0]) }}
+<section class="equipment"><h3>Fan</h3><table class="fields"><tbody>
+{% for field in vm.page1_sections[1].fields if field.label != 'Fan Hub Cover' %}<tr><th scope="row">{{ field.label }}</th><td>{{ field.value }}</td></tr>{% endfor %}
+<tr><th scope="row">Blade Sl.nos</th><td class="blade-cell"><div class="blade-grid">{% for i in range(vm.blade_capacity) %}<span>{{ vm.blades[i] if i < vm.blades|length else '' }}</span>{% endfor %}</div>{% if vm.blades_overflow %}<small>See Continuation</small>{% endif %}</td></tr>
+{% for field in vm.page1_sections[1].fields if field.label == 'Fan Hub Cover' %}<tr><th scope="row">{{ field.label }}</th><td>{{ field.value }}</td></tr>{% endfor %}
+</tbody></table></section>
+</div>
+<div class="pair">{{ fields(vm.page1_sections[2]) }}{{ fields(vm.page1_sections[3]) }}</div>
+<div class="pair">{{ fields(vm.page1_sections[4]) }}{{ fields(vm.page1_sections[5]) }}</div>
+{{ footer('1 of 3') }}
+</article>
+<article class="sheet core-page" data-page="2">
+{{ running(2) }}
+<div class="pair">{{ fields(vm.page2_sections[0]) }}{{ fields(vm.page2_sections[1]) }}</div>
+<div class="pair">{{ fields(vm.page2_sections[2]) }}{{ fields(vm.page2_sections[3]) }}</div>
+<div class="pair belt-oil">{{ fields(vm.page2_sections[4]) }}<div>{{ fields(vm.page2_sections[5]) }}{{ fields(vm.page2_sections[6]) }}</div></div>
+<section class="torque-section"><h3>Fastener Torque Details</h3><table class="torque"><thead><tr>{% for category, rows, overflow in vm.torque %}<th colspan="2">{{ category }}</th>{% endfor %}</tr><tr>{% for category in vm.torque %}<th>Diameter</th><th>Torque</th>{% endfor %}</tr></thead><tbody>
+{% for i in range(vm.torque_capacity) %}<tr>{% for category, rows, overflow in vm.torque %}<td>{{ rows[i][0] if i < rows|length else '' }}</td><td>{{ rows[i][1] if i < rows|length else '' }}</td>{% endfor %}</tr>{% endfor %}
+<tr class="continuation-notice">{% for category, rows, overflow in vm.torque %}<td colspan="2">{{ 'See Continuation' if overflow else '' }}</td>{% endfor %}</tr>
+</tbody></table></section>
+<div class="pair alignment-summary"><section><h3>Alignment Details of Mechanical Equipment</h3><table class="fields"><tr><th>Radial Value T.I.R</th><td>{{ vm.radial }}</td></tr><tr><th>Axial Value T.I.R</th><td>{{ vm.axial }}</td></tr></table></section><section><h3>Other Optionals</h3><table class="fields">{% for field in vm.switches %}<tr><th>{{ field.label }}</th><td>{{ field.value }}</td></tr>{% endfor %}</table></section></div>
+<div class="pair alignment-pair">{% for instrument in vm.alignment %}<section class="print-instrument" aria-label="{{ instrument.end }} alignment readings"><h3>{{ instrument.end }} <small>{{ vm.alignment_unit }}</small></h3>
+<svg viewBox="0 0 260 175" role="img" aria-label="{{ instrument.end }} ellipse with Top, Right, Bottom and Left readings">
+<defs><clipPath id="ellipse-{{ instrument.end }}"><ellipse cx="130" cy="88" rx="78" ry="45"/></clipPath></defs>
+<ellipse class="red-ellipse" cx="130" cy="88" rx="78" ry="45" fill="none" stroke="#e93426" stroke-width="3"/>
+<g clip-path="url(#ellipse-{{ instrument.end }})" stroke="#e93426" stroke-width="2.5"><line data-axis="horizontal" x1="52" x2="208" y1="88" y2="88" transform="translate(0 {{ instrument.shift_y }})"/><line data-axis="vertical" x1="130" x2="130" y1="43" y2="133" transform="translate({{ instrument.shift_x }} 0)"/></g>
+<g text-anchor="middle" font-family="DejaVu Sans" font-size="10" fill="black"><text x="130" y="17">Top</text><text x="130" y="32">{{ instrument.top }}</text><text x="235" y="76">Right</text><text x="235" y="91">{{ instrument.right }}</text><text x="130" y="151">{{ instrument.bottom }}</text><text x="130" y="166">Bottom</text><text x="25" y="76">Left</text><text x="25" y="91">{{ instrument.left }}</text></g>
+</svg></section>{% endfor %}</div>
+{{ footer('2 of 3') }}
+</article>
+<article class="sheet core-page" data-page="3">
+{{ running(3) }}
+<h2 class="team-heading">DETAILED REPORT BY THE ERECTION TEAM-LEADER</h2>
+<section class="team-report ruled-text" aria-label="Detailed Report">{% for i in range(vm.team_capacity) %}<div class="text-line">{{ vm.team_lines[i] if i < vm.team_lines|length and vm.team_lines[i] else '\u00a0' }}</div>{% endfor %}</section>
+<div class="pair completion-pair"><section class="supervisor-identity"><p><strong>Erected by:</strong> {{ vm.supervisor_name }}</p><h3>Name (in Block Letters)</h3><p>{{ vm.supervisor_block_name }}</p><p>Employee ID: {{ vm.employee_id }}</p></section><section><h3>Customer's Comment</h3><div class="customer-comment ruled-text">{% for i in range(vm.comment_capacity) %}<div class="text-line">{{ vm.comment_lines[i] if i < vm.comment_lines|length and vm.comment_lines[i] else '\u00a0' }}</div>{% endfor %}</div><h3>Customer Sign</h3><div class="sign-box">{% if signature_uri %}<img class="customer-sign" src="{{ signature_uri }}" alt="Saved Customer Sign">{% endif %}</div><p class="sign-date">Sign Date: {{ vm.sign_date }}</p></section></div>
+{{ footer('3 of 3') }}
+</article>
+{% for continuation in vm.continuations %}<article class="sheet continuation-page" data-continuation="{{ loop.index }}">
+{{ running(0) }}<h2 class="official-title">ERECTION &amp; COMMISSIONING COMPLETION REPORT<br>CONTINUATION</h2><h3 class="continuation-heading">{{ continuation.section }}</h3><section class="continuation-text">{{ lines(continuation.lines) }}</section>
+{{ footer('Continuation ' ~ loop.index ~ ' of ' ~ vm.continuations|length) }}
+</article>{% endfor %}
+</main></body></html>

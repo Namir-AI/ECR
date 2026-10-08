@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "components/action_link.html" import action_link %}
 {% block title %}{{ report.display_identity }} — Paharpur ECR{% endblock %}
 {% block content %}
 <section class="card">
-  <div class="heading-row"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div><a href="{{ back_url | default('/reports') }}">Back to reports</a></div>
+  <div class="heading-row action-heading"><div><p class="eyebrow">READ-ONLY ECR REPORT</p><h1>{{ report.display_identity }}</h1></div>{{ action_link(back_url | default('/reports'), 'Back to Reports', 'arrow-left') }}</div>
   {% include 'ecr/workflow_actions.html' %}
+  <div class="actions">{{ action_link('/ecr/reports/' ~ report.id ~ '/print', 'Print', 'printer', primary=true) }}{% if server_pdf_enabled() %}<a class="button secondary" href="/ecr/reports/{{ report.id }}/pdf">Download PDF</a>{% endif %}</div>
   {% if validation_errors %}<section class="validation-summary" role="alert"><h2>Fields to complete or correct</h2>{% for section, errors in validation_errors.items() %}<h3>{{ section }}</h3><ul>{% for issue in errors %}<li>{{ issue }}</li>{% endfor %}</ul>{% endfor %}</section>{% endif %}
   <dl class="details-grid">
     <dt>Status</dt><dd><span class="status-badge status-{{ report.status.value|lower }}">{{ report.status.value }}</span></dd>
