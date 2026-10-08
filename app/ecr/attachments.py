@@ -115,13 +115,16 @@ class StagedAttachment:
 
 def stage(store, upload):
     """Copy one validated seekable file before acquiring business locks."""
-    return StagedAttachment(
-        store.put_stream(upload.stream, upload.media_type),
-        upload.filename,
-        upload.media_type,
-        upload.byte_size,
-        upload.pdf_page_count,
-    )
+    try:
+        return StagedAttachment(
+            store.put_stream(upload.stream, upload.media_type),
+            upload.filename,
+            upload.media_type,
+            upload.byte_size,
+            upload.pdf_page_count,
+        )
+    finally:
+        upload.close()
 
 
 def publish(db, package_id, actor, store, action, uploads, **options):

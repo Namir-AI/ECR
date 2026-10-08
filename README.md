@@ -536,6 +536,11 @@ The add-photo form is hidden at five photos and returns after removal.
   with scripts/active actions/embedded files, encrypted/uninspectable PDFs,
   malformed images/documents and unsupported formats are rejected. Parsing uses
   [pypdf's strict reader](https://pypdf.readthedocs.io/en/stable/modules/PdfReader.html).
+  Known harmless Adobe Scan `pageEntities.json` page metadata is removed during
+  JCC PDF upload, then the sanitized PDF is strictly revalidated. Arbitrary
+  embedded files and active PDF content remain prohibited; only sanitized output
+  is stored. The removable UTF-8 JSON payload is limited to 4096 bytes per page,
+  with only `type` and `isBackSide` scalar fields; this is not a JCC file-size cap.
   Multipart files are disk-backed from the first byte, validated through seekable
   streams and staged one at a time. Storage copies and private HTTP downloads use
   64 KiB chunks, not whole-file byte arrays. PDF dictionaries/references are
