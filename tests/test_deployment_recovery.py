@@ -133,7 +133,8 @@ def test_atomic_publication_rejects_symlinks(tmp_path, field):
 
 @pytest.mark.parametrize("mode", ["fresh", "reconfigure", "repair"])
 @pytest.mark.parametrize(
-    "failure", ["db", "import", "migration", "local", "https-setup", "https", "none"]
+    "failure",
+    ["db", "import", "storage", "migration", "local", "https-setup", "https", "none"],
 )
 def test_installer_launcher_is_last_and_requires_health(tmp_path, mode, failure):
     tail = (
@@ -156,6 +157,7 @@ previous_commit={Q(prior)}; previous_ref={Q(prior_ref)}; ECR_SERVICE_USER=ecr
 ECR_INSTALL_DIR={Q(str(tmp_path))}
 run_db_check() {{ echo db >>{Q(str(events))}; {"return 50" if failure == "db" else ":"}; }}
 run_application_import_check() {{ echo import >>{Q(str(events))}; {"return 50" if failure == "import" else ":"}; }}
+run_storage_check() {{ echo storage >>{Q(str(events))}; {"return 50" if failure == "storage" else ":"}; }}
 run_migrations() {{ echo migrate >>{Q(str(events))}; {"return 50" if failure == "migration" else ":"}; }}
 activate_release() {{ echo activate >>{Q(str(events))}; }}
 original_state=$(declare -f write_deployment_state)
@@ -176,7 +178,7 @@ git_as_deployer() {{ echo exact-target; }}
     if failure == "none":
         assert result.returncode == 0, result.stderr
         assert sequence == (
-            ["db", "import", "migrate"]
+            ["db", "import", "storage", "migrate"]
             + ([] if mode == "repair" else ["activate"])
             + ["local", "tls-config", "https"]
             + ([] if mode == "repair" else ["state", "history"])
@@ -192,6 +194,8 @@ git_as_deployer() {{ echo exact-target; }}
         assert result.returncode != 0
         if failure == "import":
             assert sequence == ["db", "import"]
+        if failure == "storage":
+            assert sequence == ["db", "import", "storage"]
         assert "launcher" not in sequence
         assert "state" not in sequence and "history" not in sequence
         assert not (tmp_path / "state/deployment.env").exists()
@@ -220,6 +224,7 @@ previous_commit=""; previous_ref=""
 ensure_repository() {{ :; }}; fetch_repository() {{ :; }}
 prepare_release() {{ printf '%s' {Q(str(active))}; }}
 write_production_env() {{ :; }}; link_release_env() {{ :; }}
+write_deployment_config() {{ :; }}
 {body}
 printf '%s\\n' "$previous_commit" "$previous_ref"
 """)

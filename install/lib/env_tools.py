@@ -34,6 +34,7 @@ MANAGED_DEFAULTS = frozenset(
         "DB_POOL_RECYCLE_SECONDS",
         "DB_CONNECT_TIMEOUT_SECONDS",
         "DB_ECHO",
+        "STORAGE_BACKEND",
     }
 )
 
@@ -55,6 +56,8 @@ def storage_path(target: Path, install_dir: Path | None = None) -> Path:
 def upgrade_env(target: Path, template: Path, install_dir: Path) -> None:
     values = dotenv_values(target, interpolate=False)
     defaults = dotenv_values(template, interpolate=False)
+    # Unlike generic defaults, legacy installations always remain local.
+    defaults["STORAGE_BACKEND"] = "local"
     additions = {
         key: defaults[key]
         for key in MANAGED_DEFAULTS
@@ -93,7 +96,8 @@ def validate_env(target: Path) -> None:
             {str(error["loc"][0]) for error in exc.errors() if error["loc"]}
         )
         raise SystemExit(
-            "Invalid production configuration fields: " + ", ".join(fields)
+            "Invalid production configuration fields: "
+            + (", ".join(fields) or "storage configuration or application value ranges")
         ) from None
     if settings.app_env != "production" or settings.app_debug or settings.db_echo:
         raise SystemExit(
@@ -115,10 +119,56 @@ def _stdin_pairs() -> dict[str, str]:
 
 
 def write_env(target: Path, template: Path) -> None:
+    pairs = _stdin_pairs()
+    if "STORAGE_BACKEND" in pairs:
+        from pydantic import ValidationError
+
+        from app.core.config import AppSettings
+
+        try:
+            settings = AppSettings(
+                _env_file=None,
+                **{
+                    k.lower(): pairs.get(k, "")
+                    for k in ("STORAGE_BACKEND", "S3_BUCKET", "S3_REGION", "S3_PREFIX")
+                },
+            )
+        except ValidationError:
+            raise SystemExit(
+                "Invalid storage configuration: check backend, bucket, region and prefix."
+            ) from None
+        pairs.update(
+            S3_BUCKET=settings.s3_bucket or "",
+            S3_REGION=settings.s3_region or "",
+            S3_PREFIX=settings.s3_prefix or "",
+        )
+    if target.exists() and "STORAGE_BACKEND" in pairs:
+        old = storage_configuration(target)
+        new = tuple(
+            pairs.get(key, "")
+            for key in ("STORAGE_BACKEND", "S3_BUCKET", "S3_REGION", "S3_PREFIX")
+        )
+        if old != new:
+            raise SystemExit(
+                "Storage backend/namespace changes require reviewed recovery; use a separate fresh installation. Existing storage configuration is preserved."
+            )
     if not target.exists():
         shutil.copyfile(template, target)
-    for key, value in _stdin_pairs().items():
+    for key, value in pairs.items():
         set_key(target, key, value, quote_mode="always")
+
+
+def storage_configuration(target: Path) -> tuple[str, str, str, str]:
+    values = dotenv_values(target, interpolate=False)
+    backend = values.get("STORAGE_BACKEND") or "local"
+    if backend not in ("local", "s3"):
+        raise SystemExit("Invalid STORAGE_BACKEND.")
+    if backend == "local":
+        return ("local", "", "", "")
+    config = tuple(values.get(k) or "" for k in ("S3_BUCKET", "S3_REGION", "S3_PREFIX"))
+    if not all(config):
+        raise SystemExit("S3 configuration is incomplete; operator recovery required.")
+    return (backend, config[0], config[1], config[2].removesuffix("/"))
 
 
 def read_env(target: Path, keys: list[str]) -> None:
@@ -155,6 +205,11 @@ def main() -> int:
         print(storage_path(Path(sys.argv[2])))
     elif command == "backup-storage" and len(sys.argv) == 4:
         print(storage_path(Path(sys.argv[2]), Path(sys.argv[3])))
+    elif command == "storage-config" and len(sys.argv) == 3:
+        for value in storage_configuration(Path(sys.argv[2])):
+            sys.stdout.buffer.write(value.encode("utf-8") + b"\0")
+    elif command == "storage-backend" and len(sys.argv) == 3:
+        print(storage_configuration(Path(sys.argv[2]))[0])
     elif command == "validate" and len(sys.argv) == 3:
         validate_env(Path(sys.argv[2]))
     else:

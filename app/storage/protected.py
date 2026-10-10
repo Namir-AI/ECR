@@ -64,6 +64,12 @@ def get_protected_storage(request: Request) -> ProtectedStorage:
     if configured is not None:
         return configured
     settings = request.app.state.settings
+    if settings.storage_backend == "s3":
+        from app.storage.s3 import S3ProtectedStorage
+
+        return S3ProtectedStorage(
+            settings.s3_bucket, settings.s3_region, settings.s3_prefix
+        )
     root = settings.storage_root
     if settings.app_env == "production" and not root.is_absolute():
         raise OSError("Production STORAGE_ROOT must be an absolute persistent path")

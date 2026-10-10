@@ -57,13 +57,20 @@ else
 fi
 backup_file=$(safe_backup_path "$requested_backup") || die "Backup must be a .sql.gz file inside backups."
 current_release=$(valid_current_release_path)
+read_storage_environment "$current_release"
 python="$current_release/.venv/bin/python"
 helper="$SCRIPT_DIR/lib/restore_tools.py"
 storage_root=$("$python" "$SCRIPT_DIR/lib/env_tools.py" storage "$ECR_INSTALL_DIR/shared/.env")
 umask 0077
 workspace=$(mktemp -d "$ECR_INSTALL_DIR/state/restore.XXXXXXXX")
 "$python" "$helper" prepare "$backup_file" "$ECR_INSTALL_DIR" "$storage_root" \
-    "$ECR_DB_NAME_VALUE" "$ECR_SERVICE_USER" "$workspace"
+    "$ECR_DB_NAME_VALUE" "$ECR_SERVICE_USER" "$workspace" \
+    "$ECR_STORAGE_BACKEND" "$ECR_S3_BUCKET" "$ECR_S3_REGION" "$ECR_S3_PREFIX"
+if [[ "$ECR_STORAGE_BACKEND" == s3 ]]; then
+    warn "This restores MySQL only. It does NOT restore or delete S3 objects. IT must review matching S3 object versions/retention before proceeding."
+    read -r -p "Type ACKNOWLEDGE S3 RECOVERY ${ECR_DB_NAME_VALUE} to confirm external object recovery has been reviewed: " acknowledgement
+    [[ "$acknowledgement" == "ACKNOWLEDGE S3 RECOVERY ${ECR_DB_NAME_VALUE}" ]] || die "S3 recovery review was not acknowledged."
+fi
 if [[ $("$python" "$helper" missing "$workspace") == yes ]]; then
     read -r -p "Type ACKNOWLEDGE MISSING FILES ${ECR_DB_NAME_VALUE} to allow recovery without those files: " acknowledgement
     [[ "$acknowledgement" == "ACKNOWLEDGE MISSING FILES ${ECR_DB_NAME_VALUE}" ]] || die "Missing-files recovery declined."

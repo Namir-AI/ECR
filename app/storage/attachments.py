@@ -128,6 +128,12 @@ def get_attachment_storage(request: Request) -> AttachmentStorage:
     if configured is not None:
         return configured
     settings = request.app.state.settings
+    if settings.storage_backend == "s3":
+        from app.storage.s3 import S3AttachmentStorage
+
+        return S3AttachmentStorage(
+            settings.s3_bucket, settings.s3_region, settings.s3_prefix
+        )
     if settings.app_env == "production" and not settings.storage_root.is_absolute():
         raise OSError("Production STORAGE_ROOT must be an absolute persistent path")
     return LocalAttachmentStorage(settings.storage_root)

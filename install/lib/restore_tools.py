@@ -172,7 +172,16 @@ def extract(path: Path, destination: Path, shared: bool, uid: int, gid: int) -> 
 
 
 def prepare(
-    sql: Path, install: Path, storage: Path, database: str, user: str, workspace: Path
+    sql: Path,
+    install: Path,
+    storage: Path,
+    database: str,
+    user: str,
+    workspace: Path,
+    backend: str = "local",
+    bucket: str = "",
+    region: str = "",
+    prefix: str = "",
 ) -> None:
     install = install.resolve()
     base = str(sql).removesuffix(".sql.gz")
@@ -191,6 +200,34 @@ def prepare(
         )
     if meta.get("BACKUP_FORMAT") == "2" and meta.get("BACKUP_COMPLETE") != "true":
         fail("Backup set was not completed successfully.")
+    if meta.get("STORAGE_BACKEND", "local") != backend:
+        fail(
+            "Storage backend mismatch: reviewed recovery required; no backend conversion is performed."
+        )
+    if backend == "s3":
+        if not all((bucket, region, prefix)) or tuple(
+            meta.get(k) for k in ("S3_BUCKET", "S3_REGION", "S3_PREFIX")
+        ) != (bucket, region, prefix):
+            fail(
+                "S3 namespace mismatch: current and backed-up bucket/region/prefix must match."
+            )
+        if any(
+            Path(base + suffix).exists()
+            for suffix in (".files.tar.gz", ".storage.tar.gz")
+        ) or any(k in meta for k in ("FILES_SHA256", "STORAGE_SHA256")):
+            fail(
+                "S3 backup unexpectedly contains local object archives; reviewed recovery required."
+            )
+        (workspace / "plan.json").write_text(
+            json.dumps({"entries": [], "missing": [], "install": str(install)}),
+            encoding="utf-8",
+        )
+        print(
+            "Validated MySQL backup for S3 installation. S3 evidence recovery is external and requires explicit operator acknowledgement."
+        )
+        return
+    if backend != "local":
+        fail("Invalid storage backend for restore.")
     data_path = install / "shared/data"
     data = safe_destination(data_path, install)
     if data != data_path or data_path.is_symlink():
@@ -306,6 +343,7 @@ def main() -> None:
             sys.argv[5],
             sys.argv[6],
             Path(sys.argv[7]),
+            *sys.argv[8:12],
         )
     elif command == "publish":
         publish(Path(sys.argv[2]))

@@ -34,6 +34,9 @@ install() {
     command install "${args[@]}"
 }
 run_as_service() { "$@"; }
+# Older generic deployment fixtures contain a deliberately minimal app module.
+# S3 preflight itself is exercised with fake AWS in test_s3_deployment.py.
+run_storage_check() { :; }
 """
 
 
@@ -549,6 +552,7 @@ append_deployment_history update new-tag {Q(target)} {Q(str(active))}
         "db",
         "env",
         "import",
+        "storage",
         "recovery",
         "migration",
         "start",
@@ -607,6 +611,7 @@ run_db_check() {{ echo db >>{Q(str(events))}; {'if [[ $(git -C "$1" rev-parse HE
 original_import=$(declare -f run_application_import_check)
 eval "${{original_import/run_application_import_check/real_run_application_import_check}}"
 run_application_import_check() {{ echo import >>{Q(str(events))}; real_run_application_import_check "$@"; }}
+run_storage_check() {{ echo storage >>{Q(str(events))}; {"return 49" if failure == "storage" else ":"}; }}
 run_migrations() {{ echo migration >>{Q(str(events))}; {"return 43" if failure == "migration" else ":"}; }}
 systemctl() {{ echo "$1" >>{Q(str(events))}; {"if [[ $1 == start ]]; then return 50; fi" if failure == "start" else ":"}; }}
 wait_for_local_health() {{ echo local >>{Q(str(events))}; {'if [[ $(git -C "$application_dir" rev-parse HEAD) == ' + Q(target) + " ]]; then return 44; fi" if failure == "health" else ":"}; }}
@@ -692,10 +697,17 @@ esac
     dirs = list((base / "releases").iterdir())
     assert dirs == [active]
     assert (base / "current").resolve() == active
-    if failure in ("uv", "db", "env", "import", "recovery"):
+    if failure in ("uv", "db", "env", "import", "storage", "recovery"):
         assert (
             result.returncode
-            == {"uv": 41, "db": 42, "env": 40, "import": 1, "recovery": 42}[failure]
+            == {
+                "uv": 41,
+                "db": 42,
+                "env": 40,
+                "import": 1,
+                "storage": 49,
+                "recovery": 42,
+            }[failure]
         ), result.stderr
         assert dirs == [base / "releases/old"]
         assert "migration" not in log
@@ -767,6 +779,7 @@ esac
             "sync",
             "db",
             "import",
+            "storage",
             "migration",
             "start",
             "local",
@@ -1311,6 +1324,11 @@ def test_launcher_updates_existing_worktree_with_no_private_service_paths(
         "    stream.write('application-import\\n')\n"
     )
     shutil.copyfile(ROOT / "app/core/config.py", source / "app/core/config.py")
+    (source / "app/storage").mkdir()
+    (source / "app/storage/__init__.py").write_text("")
+    shutil.copyfile(
+        ROOT / "app/storage/configuration.py", source / "app/storage/configuration.py"
+    )
     (source / "app/db").mkdir()
     (source / "app/db/__init__.py").write_text("")
     (source / "app/db/check.py").write_text(
@@ -1854,9 +1872,9 @@ for arg in "$@"; do
     if [[ $arg == https://* ]]; then url=$arg; fi
 done
 destination=${{@: -1}}
-path=${{url#*/approved-ref/install/}}
+path=${{url#*/approved-ref/}}
 printf '%s\\n' "$path" >>{Q(str(downloaded))}
-cp {Q(str(ROOT / "install"))}/"$path" "$destination"
+cp {Q(str(ROOT))}/"$path" "$destination"
 """,
     )
     env = dict(os.environ, PATH=f"{bins}:{os.environ['PATH']}")
@@ -1871,9 +1889,10 @@ cp {Q(str(ROOT / "install"))}/"$path" "$destination"
     assert result.returncode != 0
     assert "sudo or as root" in result.stderr
     assert downloaded.read_text().splitlines() == [
-        "install.sh",
-        "lib/common.sh",
-        "lib/env_tools.py",
-        "lib/runtime_tools.py",
-        "ecr-update.sh",
+        "install/install.sh",
+        "install/lib/common.sh",
+        "install/lib/env_tools.py",
+        "install/lib/runtime_tools.py",
+        "app/storage/configuration.py",
+        "install/ecr-update.sh",
     ]

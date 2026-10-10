@@ -6,6 +6,13 @@ Internal web application for digitizing Paharpur Cooling Towers Ltd. Erection
 The current implementation scope is the shared application foundation and the
 ECR module only. Budget and Bill modules are not implemented.
 
+Private ECR evidence storage is selectable: the existing local protected backend
+remains the default; fresh installations may select private S3 using the AWS SDK
+credential chain / EC2 IAM role. See [S3 installation and operations](install/S3_STORAGE.md).
+MySQL keys/metadata and ECR authorization/workflows are unchanged. No existing
+object migration is provided; S3 evidence backup/recovery is an IT responsibility
+separate from the mandatory MySQL backup.
+
 Current implemented scope: Phases 1–5 (technical Pages 1–3, optional customer
 signature, dashboards, Review/Submit/Approval and scoped exact serial search),
 and accepted Phase 6 package attachments. Phase 8B official browser Print / Save
@@ -413,17 +420,20 @@ use 0600 and the signature directory 0700. Branch Admin access follows the
 report's historical branch, not the Supervisor's current branch. Superadmin
 has read-only global access. All mutations require owner + Draft + CSRF.
 
-For production, **set an absolute persistent `STORAGE_ROOT` in the existing
-private .env**, outside application release directories. With the existing
+For the local backend, production requires an absolute persistent `STORAGE_ROOT`
+in the private .env, outside application release directories. The installer
+supplies this automatically. With the existing
 installer layout an appropriate path is `/opt/ecr/shared/data/protected`
 (adapt to your installation directory). It must be writable by the ECR service
 account and must not be publicly served. The production signature routes fail
-safely until this is configured. Deployment scripts remain unchanged. Back up
+safely until this is configured. Back up
 the protected files **together with the database**; a DB-only restore cannot
 restore signature content. The existing shared-data backup layout can include it.
 
-Storage has a small put/read/delete interface suitable for a future S3 adapter;
-S3 remains deferred; Phase 6 extends protected storage for attachments. DB commit precedes
+Storage retains its put/read/delete signature interface and streaming attachment
+interface. Selectable S3 adapters now implement both; the local implementations
+remain intact. See [backend configuration and recovery](install/S3_STORAGE.md).
+DB commit precedes
 old-object cleanup. A crash/ambiguous commit or cleanup failure may leave an
 unreferenced private file. No automatic broad file deletion/garbage collection
 is implemented; any later maintenance must reconcile DB references safely.

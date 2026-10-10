@@ -9,6 +9,10 @@ ECR_DEFAULT_SERVICE_USER="ecr"
 ECR_DEFAULT_SERVICE_NAME="ecr"
 ECR_DEFAULT_APP_PORT="8000"
 ECR_PRODUCTION_PYTHON_VERSION="3.12"
+ECR_STORAGE_BACKEND=${ECR_STORAGE_BACKEND:-local}
+ECR_S3_BUCKET=${ECR_S3_BUCKET:-}
+ECR_S3_REGION=${ECR_S3_REGION:-}
+ECR_S3_PREFIX=${ECR_S3_PREFIX:-}
 
 log() {
     printf '[ECR] %s\n' "$*" >&2
@@ -478,6 +482,27 @@ run_application_import_check() {
     local application_dir=$1
     log "Checking target application import as the ECR service account before migrations."
     (cd "$application_dir" && run_as_service "$application_dir/.venv/bin/python" -c 'import app.main')
+}
+
+run_storage_check() {
+    local application_dir=$1
+    (cd "$application_dir" && run_as_service "$application_dir/.venv/bin/python" -m app.storage.check)
+}
+
+read_storage_environment() {
+    local release_dir helper
+    release_dir=${1:-}
+    if [[ -z "$release_dir" ]]; then
+        release_dir=$(valid_current_release_path) || die "Storage config reader requires an active runtime."
+    fi
+    helper=$(deployment_env_helper "$release_dir")
+    local -a values=()
+    mapfile -d '' -t values < <("$release_dir/.venv/bin/python" "$helper" storage-config "$ECR_INSTALL_DIR/shared/.env")
+    (( ${#values[@]} == 4 )) || die "Production storage configuration is incomplete."
+    ECR_STORAGE_BACKEND=${values[0]}
+    ECR_S3_BUCKET=${values[1]}
+    ECR_S3_REGION=${values[2]}
+    ECR_S3_PREFIX=${values[3]}
 }
 
 run_migrations() {

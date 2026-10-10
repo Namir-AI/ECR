@@ -4,9 +4,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
+
+from app.storage.configuration import normalize_prefix, validate_bucket, validate_region
 
 
 class AppSettings(BaseSettings):
@@ -26,6 +28,10 @@ class AppSettings(BaseSettings):
     app_port: int = Field(default=8000, ge=1, le=65535)
     # Production must select an absolute persistent directory outside releases.
     storage_root: Path = Path("var/protected")
+    storage_backend: Literal["local", "s3"] = "local"
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_prefix: str | None = None
     session_cookie_name: str = "ecr_session"
     session_ttl_days: int = Field(default=30, ge=1, le=365)
     session_secure_cookie: bool = False
@@ -36,6 +42,23 @@ class AppSettings(BaseSettings):
     argon2_time_cost: int = Field(default=3, ge=1, le=10)
     argon2_memory_cost_kib: int = Field(default=65536, ge=8192, le=1048576)
     argon2_parallelism: int = Field(default=4, ge=1, le=16)
+
+    @field_validator("s3_bucket", "s3_region", "s3_prefix", mode="before")
+    @classmethod
+    def empty_s3_values(cls, value):
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def storage_configuration_is_valid(self) -> "AppSettings":
+        if self.storage_backend == "s3":
+            if not all((self.s3_bucket, self.s3_region, self.s3_prefix)):
+                raise ValueError(
+                    "S3 storage requires S3_BUCKET, S3_REGION and S3_PREFIX"
+                )
+            self.s3_bucket = validate_bucket(self.s3_bucket)
+            self.s3_region = validate_region(self.s3_region)
+            self.s3_prefix = normalize_prefix(self.s3_prefix)
+        return self
 
     @model_validator(mode="after")
     def password_length_range_is_valid(self) -> "AppSettings":

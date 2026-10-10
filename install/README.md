@@ -41,6 +41,11 @@ deliver improvements to the launcher automatically.
 
 ## A. AWS EC2 prerequisites
 
+Fresh installs select Local protected storage or AWS S3. See
+[private S3 storage](S3_STORAGE.md) for installer inputs, IAM policy, service-user
+preflight and backend-specific backup/recovery. Bucket, region and prefix are
+supplied by IT; no static AWS credentials or AWS CLI are required.
+
 - An existing EC2 instance or company Ubuntu server with `sudo` access.
 - Ubuntu 26.04 LTS (amd64) and Ubuntu 24.04 LTS are supported. The installer
   does not depend on either release providing Python 3.12 through apt. It uses
@@ -381,13 +386,17 @@ sudo ./install/backup.sh
 ```
 
 Backups use a consistent transactional `mysqldump`, gzip verification, SHA-256
-metadata, deployed ref/commit metadata, and mode `0600`. If `shared/data/`
+metadata, deployed ref/commit metadata, and mode `0600`. For the **local backend**, if `shared/data/`
 exists, it is archived alongside the SQL dump, including when empty.
 The archive includes `data/protected` customer signatures. A valid custom
 `STORAGE_ROOT` outside `shared/data` receives a separate `.storage.tar.gz`
 archive with its own checksum/location metadata. Both file archives undergo
 gzip and tar readability checks. New backup metadata marks a completed backup
 set; nanosecond timestamps avoid overwriting backups taken close together.
+
+For **S3**, only SQL is backed up here, with backend/bucket/region/prefix metadata.
+S3 objects are not archived from STORAGE_ROOT. IT must arrange S3 evidence
+retention/recovery separately; see [S3 recovery safeguards](S3_STORAGE.md).
 
 Backups are retained indefinitely by default. Optional retention is explicit
 and always preserves the newest five SQL backups:
@@ -408,7 +417,12 @@ cd /opt/ecr/current
 sudo ./install/restore.sh /opt/ecr/backups/ecr-DATABASE-TIMESTAMP-REF.sql.gz
 ```
 
-With no argument, the script lists available SQL backups. Recovery is one
+For S3 backup sets, the current backend and bucket/region/prefix must match, and
+`ACKNOWLEDGE S3 RECOVERY <database>` is required in addition to `RESTORE`. This
+performs DB-only recovery, never modifies S3 objects, and requires IT to review
+matching retained object versions separately. Backend conversion is rejected.
+
+With no argument, the script lists available SQL backups. **Local** recovery is one
 reviewed operation for the database **and its paired persistent files**:
 
 1. Validate SQL gzip/SHA-256 and paired archive checksums. Parse metadata as

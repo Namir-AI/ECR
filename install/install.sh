@@ -91,6 +91,7 @@ if [[ ! -r "$COMMON_FILE" ]]; then
     download_bootstrap_file "$bootstrap_base_url/lib/common.sh" "$temporary_common"
     download_bootstrap_file "$bootstrap_base_url/lib/env_tools.py" "$temporary_tools/lib/env_tools.py"
     download_bootstrap_file "$bootstrap_base_url/lib/runtime_tools.py" "$temporary_tools/lib/runtime_tools.py"
+    download_bootstrap_file "${bootstrap_base_url%/install}/app/storage/configuration.py" "$temporary_tools/lib/storage_configuration.py"
     download_bootstrap_file "$bootstrap_base_url/ecr-update.sh" "$temporary_tools/ecr-update.sh"
     SCRIPT_DIR=$temporary_tools
     COMMON_FILE=$temporary_common
@@ -121,7 +122,7 @@ install_system_packages() {
     apt-get update
     local -a packages=(
         ca-certificates curl wget git openssh-client
-        nginx default-mysql-client gzip tar util-linux
+        nginx default-mysql-client gzip tar util-linux fonts-dejavu-core
     )
     if [[ "$ECR_DB_TYPE" == "local" ]]; then
         packages+=(mysql-server)
@@ -186,7 +187,29 @@ configure_deploy_key() {
     fi
 }
 
+validate_storage_values() {
+    # Prompts precede uv installation. Validate with its protected CPython as
+    # soon as available, BEFORE any saved deployment configuration is written.
+    # The standalone bootstrap carries the same dependency-free application
+    # validator; no duplicated Bash regexes or system Python are needed.
+    local helper="$SCRIPT_DIR/../app/storage/configuration.py"
+    if [[ -f "$SCRIPT_DIR/lib/storage_configuration.py" ]]; then
+        helper="$SCRIPT_DIR/lib/storage_configuration.py"
+    fi
+    [[ -f "$helper" && ! -L "$helper" ]] || die "Storage configuration validator is unavailable."
+    ensure_production_python
+    local -a values=()
+    mapfile -d '' -t values < <("$ECR_PRODUCTION_PYTHON" "$helper" \
+        "$ECR_STORAGE_BACKEND" "$ECR_S3_BUCKET" "$ECR_S3_REGION" "$ECR_S3_PREFIX")
+    (( ${#values[@]} == 4 )) || die "Storage configuration was not saved. Correct fresh-install inputs, or choose 'Reconfigure and resume incomplete installation' to correct saved values when no production .env exists."
+    ECR_STORAGE_BACKEND=${values[0]}
+    ECR_S3_BUCKET=${values[1]}
+    ECR_S3_REGION=${values[2]}
+    ECR_S3_PREFIX=${values[3]}
+}
+
 write_deployment_config() {
+    validate_storage_values
     install -d -o root -g root -m 0700 /etc/ecr
     local temporary_config
     temporary_config=$(mktemp /etc/ecr/deployment.conf.XXXXXX)
@@ -204,6 +227,10 @@ write_deployment_config() {
         printf 'ECR_SERVICE_USER=%q\n' "$ECR_SERVICE_USER"
         printf 'ECR_SERVICE_NAME=%q\n' "$ECR_SERVICE_NAME"
         printf 'ECR_APP_PORT=%q\n' "$ECR_APP_PORT"
+        printf 'ECR_STORAGE_BACKEND=%q\n' "$ECR_STORAGE_BACKEND"
+        printf 'ECR_S3_BUCKET=%q\n' "$ECR_S3_BUCKET"
+        printf 'ECR_S3_REGION=%q\n' "$ECR_S3_REGION"
+        printf 'ECR_S3_PREFIX=%q\n' "$ECR_S3_PREFIX"
     } >"$temporary_config"
     chmod 0600 "$temporary_config"
     chown root:root "$temporary_config"
@@ -292,6 +319,10 @@ write_production_env() {
         printf '%s\0%s\0' APP_HOST 127.0.0.1
         printf '%s\0%s\0' APP_PORT "$ECR_APP_PORT"
         printf '%s\0%s\0' STORAGE_ROOT "$storage_root"
+        printf '%s\0%s\0' STORAGE_BACKEND "$ECR_STORAGE_BACKEND"
+        printf '%s\0%s\0' S3_BUCKET "$ECR_S3_BUCKET"
+        printf '%s\0%s\0' S3_REGION "$ECR_S3_REGION"
+        printf '%s\0%s\0' S3_PREFIX "$ECR_S3_PREFIX"
         printf '%s\0%s\0' SESSION_SECURE_COOKIE "$ECR_HTTPS_ENABLED"
         printf '%s\0%s\0' DB_HOST "$DB_HOST"
         printf '%s\0%s\0' DB_PORT "$DB_PORT"
@@ -518,6 +549,8 @@ prompt_deployment_values() {
     fi
     validate_secret_value "Database Password" "$DB_PASSWORD"
 
+    prompt_storage_values
+
     ECR_SSL_EMAIL=$(prompt_value "Let's Encrypt / SSL email address" "${ECR_SSL_EMAIL:-}")
     ECR_HTTPS_ENABLED=false
     if confirm "Enable HTTPS?" Y; then
@@ -531,6 +564,35 @@ prompt_deployment_values() {
     if confirm "Create initial ECR Admin after installation?" Y; then
         CREATE_INITIAL_ADMIN=true
     fi
+}
+
+prompt_storage_values() {
+    if [[ -f "$ECR_INSTALL_DIR/shared/.env" ]]; then
+        # Protected production env, not possibly stale deployment.conf, wins.
+        if valid_current_release_path >/dev/null; then
+            read_storage_environment
+        fi
+        log "Preserving the existing storage backend and namespace; backend switching is not supported by reconfiguration."
+        return
+    fi
+    if [[ "$INSTALL_MODE" != fresh && "$INSTALL_MODE" != recover-reconfigure ]]; then
+        log "Preserving saved storage configuration during recovery."
+        return
+    fi
+    local choice
+    choice=$(prompt_value "File/object storage backend: 1) Local protected storage  2) AWS S3" "1")
+    case "$choice" in
+        1) ECR_STORAGE_BACKEND=local; ECR_S3_BUCKET=""; ECR_S3_REGION=""; ECR_S3_PREFIX="" ;;
+        2)
+            ECR_STORAGE_BACKEND=s3
+            ECR_S3_BUCKET=$(prompt_value "S3 bucket name" "")
+            ECR_S3_REGION=$(prompt_value "AWS region" "")
+            ECR_S3_PREFIX=$(prompt_value "ECR S3 prefix" "")
+            [[ -n "$ECR_S3_BUCKET" && -n "$ECR_S3_REGION" && -n "$ECR_S3_PREFIX" ]] || die "S3 bucket, region and prefix are required."
+            log "AWS SDK credential chain / EC2 IAM role is required. No AWS keys are requested or stored."
+            ;;
+        *) die "Select storage option 1 or 2." ;;
+    esac
 }
 
 prompt_recovery_database_values() {
@@ -570,6 +632,7 @@ print_summary() {
     printf '%-20s %s\n' 'Database name:' "$DB_NAME"
     printf '%-20s %s\n' 'HTTPS:' "$ECR_HTTPS_ENABLED"
     printf '%-20s %s\n' 'Repository:' "$ECR_REPOSITORY_URL"
+    printf '%-20s %s\n' 'Object storage:' "$ECR_STORAGE_BACKEND"
     printf '\n'
 }
 
@@ -596,6 +659,10 @@ DB_PASSWORD=""
 CREATE_INITIAL_ADMIN=false
 CHANGE_LOCAL_DB_PASSWORD=false
 RECOVER_USE_EXISTING_ENV=false
+ECR_STORAGE_BACKEND=local
+ECR_S3_BUCKET=""
+ECR_S3_REGION=""
+ECR_S3_PREFIX=""
 
 if [[ -r "$ECR_CONFIG_FILE" ]]; then
     load_deployment_config
@@ -619,6 +686,7 @@ if [[ -r "$ECR_CONFIG_FILE" ]]; then
                 DB_NAME=${ECR_DB_NAME:-ecr}
                 DB_PORT=3306
                 read_database_environment
+                read_storage_environment
                 DB_PORT=$ECR_DB_PORT_VALUE
                 DB_USER=$ECR_DB_USER_VALUE
                 DEPLOY_KEY_SOURCE=${ECR_DEPLOY_KEY_FILE:-}
@@ -731,6 +799,9 @@ else
         die "Requested Git ref was not found: $ECR_GIT_REF"
     release_dir=$(prepare_release "$deploy_commit")
     new_install_release=$release_dir
+    if [[ -f "$ECR_INSTALL_DIR/shared/.env" ]]; then
+        read_storage_environment "$release_dir"
+    fi
     if [[ "$INSTALL_MODE" == "recover" && \
             "$RECOVER_USE_EXISTING_ENV" == "true" ]]; then
         link_release_env "$release_dir"
@@ -747,6 +818,8 @@ else
     fi
 fi
 
+read_storage_environment "$release_dir"
+write_deployment_config
 upgrade_production_env "$release_dir"
 
 if [[ "$ECR_DB_TYPE" == "local" ]]; then
@@ -755,6 +828,7 @@ fi
 
 run_db_check "$release_dir"
 run_application_import_check "$release_dir"
+run_storage_check "$release_dir"
 installation_migration_started=true
 run_migrations "$release_dir"
 

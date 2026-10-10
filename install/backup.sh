@@ -26,6 +26,7 @@ umask 0077
 timestamp=$(date -u +%Y%m%dT%H%M%S%NZ)
 load_deployment_state || true
 current_release=$(valid_current_release_path) || die "Current application release is unavailable."
+read_storage_environment "$current_release"
 actual_commit=$(git_as_deployer -C "$current_release" rev-parse HEAD) || die "Cannot verify the active release Git commit."
 if [[ -v ECR_CURRENT_COMMIT && "$ECR_CURRENT_COMMIT" != "$actual_commit" ]]; then
     warn "Deployment metadata was stale: recorded commit $ECR_CURRENT_COMMIT differs from active worktree $actual_commit. Recording the actual active commit in this backup."
@@ -69,10 +70,15 @@ metadata_file="${backup_base}.meta"
     printf 'APPLICATION_COMMIT=%q\n' "$actual_commit"
     printf 'SQL_SHA256=%q\n' "$checksum"
     printf 'BACKUP_FORMAT=2\n'
+    printf 'STORAGE_BACKEND=%q\n' "$ECR_STORAGE_BACKEND"
+    if [[ "$ECR_STORAGE_BACKEND" == s3 ]]; then
+        printf 'S3_BUCKET=%q\nS3_REGION=%q\nS3_PREFIX=%q\n' \
+            "$ECR_S3_BUCKET" "$ECR_S3_REGION" "$ECR_S3_PREFIX"
+    fi
 } >"$metadata_file"
 chmod 0600 "$metadata_file"
 
-if [[ -d "$ECR_INSTALL_DIR/shared/data" ]]; then
+if [[ "$ECR_STORAGE_BACKEND" == local && -d "$ECR_INSTALL_DIR/shared/data" ]]; then
     files_backup="${backup_base}.files.tar.gz"
     tar -C "$ECR_INSTALL_DIR/shared" -czf "$files_backup" data
     gzip -t "$files_backup"
@@ -88,7 +94,7 @@ storage_root=$("$current_release/.venv/bin/python" "$SCRIPT_DIR/lib/env_tools.py
     backup-storage "$ECR_INSTALL_DIR/shared/.env" "$ECR_INSTALL_DIR")
 storage_root=$(readlink -f -- "$storage_root")
 data_root=$(readlink -f -- "$ECR_INSTALL_DIR/shared/data")
-if [[ -d "$storage_root" && "$storage_root" != "$data_root" && \
+if [[ "$ECR_STORAGE_BACKEND" == local && -d "$storage_root" && "$storage_root" != "$data_root" && \
         "$storage_root" != "$data_root"/* ]]; then
     storage_backup="${backup_base}.storage.tar.gz"
     tar -C "$storage_root" -czf "$storage_backup" .
@@ -97,6 +103,10 @@ if [[ -d "$storage_root" && "$storage_root" != "$data_root" && \
     chmod 0600 "$storage_backup"
     printf 'STORAGE_ROOT=%q\nSTORAGE_SHA256=%q\n' "$storage_root" \
         "$(sha256sum "$storage_backup" | awk '{print $1}')" >>"$metadata_file"
+fi
+
+if [[ "$ECR_STORAGE_BACKEND" == s3 ]]; then
+    log "S3 objects are NOT included in this backup. IT must coordinate database recovery with S3 versioning/retention recovery."
 fi
 
 printf 'BACKUP_COMPLETE=true\n' >>"$metadata_file"

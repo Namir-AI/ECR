@@ -185,6 +185,7 @@ sync_application_dependencies "$application_dir"
 upgrade_production_env "$application_dir"
 run_db_check "$application_dir"
 run_application_import_check "$application_dir"
+run_storage_check "$application_dir"
 
 migration_started=true
 run_migrations "$application_dir"
